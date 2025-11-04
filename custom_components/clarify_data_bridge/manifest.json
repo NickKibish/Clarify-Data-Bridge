@@ -1,0 +1,12 @@
+{
+  "domain": "clarify_data_bridge",
+  "name": "Clarify Data Bridge",
+  "codeowners": ["@NickKibish"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/NickKibish/clarify-data-bridge",
+  "issue_tracker": "https://github.com/NickKibish/clarify-data-bridge/issues",
+  "iot_class": "cloud_push",
+  "requirements": ["pyclarify>=0.5.0"],
+  "version": "0.1.0"
+}

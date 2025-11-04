@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Clarify.io",
+        "description": "Enter your Clarify API credentials. You can get these from your Clarify dashboard.",
+        "data": {
+          "api_key": "API Key",
+          "integration_id": "Integration ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Clarify API",
+      "invalid_auth": "Invalid API credentials",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Integration is already configured"
+    }
+  }
+}
