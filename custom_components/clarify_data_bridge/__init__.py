@@ -132,7 +132,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     exclude_device_classes = entry.data.get(CONF_EXCLUDE_DEVICE_CLASSES)
     include_patterns = entry.data.get(CONF_INCLUDE_PATTERNS)
     exclude_patterns = entry.data.get(CONF_EXCLUDE_PATTERNS)
-    selected_entities = entry.data.get(CONF_SELECTED_ENTITIES)
+
+    # Handle selected_entities - can be a list (new format) or string (legacy priority format)
+    selected_entities_raw = entry.data.get(CONF_SELECTED_ENTITIES)
+    if isinstance(selected_entities_raw, str):
+        # Legacy format - was a priority string, convert to empty list
+        selected_entities = []
+        _LOGGER.info("Converting legacy priority-based selection to entity list format")
+    elif isinstance(selected_entities_raw, list):
+        selected_entities = selected_entities_raw
+    else:
+        selected_entities = None
 
     _LOGGER.debug("Setting up Clarify Data Bridge integration for: %s", integration_id)
 
@@ -240,8 +250,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Initialize OAuth 2.0 token manager
     token_manager = OAuth2TokenManager(hass=hass, credential_manager=credential_manager)
+    # async_register_credentials will automatically start the token manager if not running
     await token_manager.async_register_credentials(entry.entry_id, credentials)
-    await token_manager.async_start()
 
     _LOGGER.info("Phase 8 security managers initialized")
 

@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.helpers.config_validation as cv
@@ -37,6 +37,7 @@ from .const import (
     DEFAULT_BATCH_INTERVAL,
     DEFAULT_MAX_BATCH_SIZE,
     SUPPORTED_DOMAINS,
+    NUMERIC_ATTRIBUTES,
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
     ERROR_UNKNOWN,
@@ -217,10 +218,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_priority_selection(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Select entities by priority level."""
+        """Select entities by domain (priority selection deprecated)."""
         if user_input is not None:
-            self._data[CONF_SELECTED_ENTITIES] = user_input.get("min_priority", "LOW")
             self._data[CONF_INCLUDE_DOMAINS] = user_input.get("include_domains", SUPPORTED_DOMAINS)
+            # Store empty list for now, will be populated in entity selection
+            self._data[CONF_SELECTED_ENTITIES] = []
 
             return await self.async_step_preview()
 
@@ -229,22 +231,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._entity_selector = EntitySelector(self.hass)
             await self._entity_selector.async_setup()
 
-        # Get entity counts by priority
+        # Get entity counts by domain (priority system removed)
         all_entities = await self._entity_selector.async_discover_entities(
             include_domains=SUPPORTED_DOMAINS,
-            min_priority=DataPriority.LOW
         )
 
-        high_count = len([e for e in all_entities if e.priority == DataPriority.HIGH])
-        medium_count = len([e for e in all_entities if e.priority == DataPriority.MEDIUM])
-        low_count = len([e for e in all_entities if e.priority == DataPriority.LOW])
-
         schema = vol.Schema({
-            vol.Required("min_priority", default="HIGH"): vol.In({
-                "HIGH": f"High Priority Only ({high_count} entities)",
-                "MEDIUM": f"Medium & High Priority ({high_count + medium_count} entities)",
-                "LOW": f"All Priorities ({len(all_entities)} entities)",
-            }),
             vol.Optional("include_domains", default=SUPPORTED_DOMAINS): cv.multi_select({
                 domain: domain.replace("_", " ").title()
                 for domain in SUPPORTED_DOMAINS
@@ -254,6 +246,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="priority_selection",
             data_schema=schema,
+            description_placeholders={
+                "entity_count": str(len(all_entities)),
+                "note": "Priority selection has been deprecated. Use the entity selection flow for more control."
+            }
         )
 
     async def async_step_domain_selection(
@@ -383,7 +379,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not self._discovered_entities:
             self._discovered_entities = await self._entity_selector.async_discover_entities(
                 include_domains=SUPPORTED_DOMAINS,
-                min_priority=DataPriority.LOW
             )
 
         # Group entities by area for better UX
@@ -482,29 +477,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self._entity_selector.async_setup()
 
         # Build discovery parameters from stored data
-        min_priority_str = self._data.get(CONF_SELECTED_ENTITIES, "LOW")
-        try:
-            min_priority = DataPriority[min_priority_str.upper()]
-        except (KeyError, AttributeError):
-            min_priority = DataPriority.LOW
-
         discovered = await self._entity_selector.async_discover_entities(
             include_domains=self._data.get(CONF_INCLUDE_DOMAINS, SUPPORTED_DOMAINS),
             include_device_classes=self._data.get(CONF_INCLUDE_DEVICE_CLASSES),
             exclude_device_classes=self._data.get(CONF_EXCLUDE_DEVICE_CLASSES),
             exclude_entity_ids=self._data.get(CONF_EXCLUDE_ENTITIES, []),
-            min_priority=min_priority,
             include_patterns=self._data.get(CONF_INCLUDE_PATTERNS),
             exclude_patterns=self._data.get(CONF_EXCLUDE_PATTERNS),
         )
 
         # Generate preview summary
-        priority_counts = defaultdict(int)
         category_counts = defaultdict(int)
         domain_counts = defaultdict(int)
 
         for entity in discovered:
-            priority_counts[entity.priority.name] += 1
             category_counts[entity.category.value] += 1
             domain_counts[entity.domain] += 1
 
@@ -523,9 +509,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             description_placeholders={
                 "total_count": str(len(discovered)),
-                "high_count": str(priority_counts.get("HIGH", 0)),
-                "medium_count": str(priority_counts.get("MEDIUM", 0)),
-                "low_count": str(priority_counts.get("LOW", 0)),
                 "domains": ", ".join(f"{k}({v})" for k, v in sorted(domain_counts.items())),
                 "categories": ", ".join(f"{k}({v})" for k, v in list(category_counts.items())[:5]),
                 "samples": "\n".join(sample_entities),
@@ -541,6 +524,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # Note: self.config_entry is automatically set by the parent class
         # Setting it explicitly is deprecated as of HA 2025.12
         self._entity_selector: EntitySelector | None = None
+        self._selected_domains: list[str] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -590,50 +574,93 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_entity_filters(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Configure entity filtering."""
+        """Configure entity filtering - redirect to domain selection."""
+        # Redirect to new HomeKit-style selection flow
+        return await self.async_step_select_domains()
+
+    async def async_step_select_domains(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 1: Select which domains to include."""
         if user_input is not None:
+            # Store selected domains temporarily
+            self._selected_domains = user_input.get("domains", [])
+            return await self.async_step_select_entities()
+
+        # Count entities by domain
+        domain_counts = self._count_entities_by_domain()
+
+        # Get currently selected domains (if any)
+        current_domains = self.config_entry.data.get(CONF_INCLUDE_DOMAINS, ["sensor"])
+
+        schema = vol.Schema({
+            vol.Required("domains", default=current_domains): cv.multi_select({
+                domain: f"{domain.replace('_', ' ').title()} ({count} entities)"
+                for domain, count in sorted(domain_counts.items())
+            })
+        })
+
+        return self.async_show_form(
+            step_id="select_domains",
+            data_schema=schema,
+            description_placeholders={
+                "description": "Select domains to include. You'll choose specific entities next."
+            }
+        )
+
+    async def async_step_select_entities(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 2: Select specific entities from chosen domains."""
+        if user_input is not None:
+            # Store selected entity IDs
+            selected = user_input.get("entities", [])
+
+            # Update config entry
             new_data = dict(self.config_entry.data)
-            new_data[CONF_SELECTED_ENTITIES] = user_input.get("min_priority", "LOW")
-            new_data[CONF_INCLUDE_DOMAINS] = user_input.get("include_domains", SUPPORTED_DOMAINS)
-            new_data[CONF_INCLUDE_DEVICE_CLASSES] = user_input.get("include_device_classes", [])
+            new_data[CONF_SELECTED_ENTITIES] = selected
+            new_data[CONF_INCLUDE_DOMAINS] = self._selected_domains
 
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
             return self.async_create_entry(title="", data={})
 
-        current_priority = self.config_entry.data.get(CONF_SELECTED_ENTITIES, "LOW")
-        current_domains = self.config_entry.data.get(CONF_INCLUDE_DOMAINS, SUPPORTED_DOMAINS)
-        current_device_classes = self.config_entry.data.get(CONF_INCLUDE_DEVICE_CLASSES, [])
+        # Get selected domains (or use current config)
+        selected_domains = getattr(self, '_selected_domains', None) or \
+                          self.config_entry.data.get(CONF_INCLUDE_DOMAINS, ["sensor"])
 
-        # Get available device classes
-        device_class_counts = defaultdict(int)
-        for state in self.hass.states.async_all():
-            device_class = state.attributes.get("device_class")
-            if device_class:
-                device_class_counts[device_class] += 1
+        # Get entities from selected domains
+        entities_by_domain = self._get_entities_by_domain(selected_domains)
 
-        device_class_options = {
-            dc: f"{dc.replace('_', ' ').title()} ({count})"
-            for dc, count in sorted(device_class_counts.items())[:30]
-        }
+        # Create entity options with friendly names, grouped by domain
+        entity_options = {}
+        for domain in sorted(entities_by_domain.keys()):
+            entities = entities_by_domain[domain]
+            for entity_id in sorted(entities):
+                state = self.hass.states.get(entity_id)
+                if state:
+                    friendly_name = state.attributes.get("friendly_name", entity_id)
+                    # Format: "Friendly Name (domain.entity_id)"
+                    entity_options[entity_id] = f"{friendly_name} ({entity_id})"
+
+        # Get currently selected entities
+        current_selected = self.config_entry.data.get(CONF_SELECTED_ENTITIES, [])
+        # Handle legacy case where CONF_SELECTED_ENTITIES might be a string (priority level)
+        if isinstance(current_selected, str):
+            current_selected = []
 
         schema = vol.Schema({
-            vol.Optional("min_priority", default=current_priority): vol.In({
-                "HIGH": "High Priority",
-                "MEDIUM": "Medium Priority",
-                "LOW": "All Priorities",
-            }),
-            vol.Optional("include_domains", default=current_domains): cv.multi_select({
-                domain: domain.replace("_", " ").title()
-                for domain in SUPPORTED_DOMAINS
-            }),
-            vol.Optional("include_device_classes", default=current_device_classes): cv.multi_select(device_class_options),
+            vol.Required("entities", default=current_selected): cv.multi_select(entity_options)
         })
 
         return self.async_show_form(
-            step_id="entity_filters",
+            step_id="select_entities",
             data_schema=schema,
+            description_placeholders={
+                "domains": ", ".join(d.replace('_', ' ').title() for d in selected_domains),
+                "entity_count": str(sum(len(e) for e in entities_by_domain.values()))
+            }
         )
 
     async def async_step_advanced_filters(
@@ -692,6 +719,49 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="advanced_filters",
             data_schema=schema,
         )
+
+    def _count_entities_by_domain(self) -> dict[str, int]:
+        """Count trackable entities in each supported domain."""
+        counts = defaultdict(int)
+        for state in self.hass.states.async_all():
+            domain = state.entity_id.split(".")[0]
+            if domain in SUPPORTED_DOMAINS:
+                # Only count trackable entities (ones with numeric data)
+                if self._is_trackable_entity(state):
+                    counts[domain] += 1
+        return dict(counts)
+
+    def _get_entities_by_domain(self, domains: list[str]) -> dict[str, list[str]]:
+        """Get all trackable entities grouped by domain."""
+        entities_by_domain = defaultdict(list)
+        for state in self.hass.states.async_all():
+            entity_id = state.entity_id
+            domain = entity_id.split(".")[0]
+
+            if domain in domains and self._is_trackable_entity(state):
+                entities_by_domain[domain].append(entity_id)
+
+        return dict(entities_by_domain)
+
+    def _is_trackable_entity(self, state: State) -> bool:
+        """Check if entity has trackable numeric data."""
+        # Check if main state is numeric
+        try:
+            float(state.state)
+            return True
+        except (ValueError, TypeError):
+            pass
+
+        # Check for numeric attributes
+        for attr in NUMERIC_ATTRIBUTES:
+            if attr in state.attributes:
+                try:
+                    float(state.attributes[attr])
+                    return True
+                except (ValueError, TypeError):
+                    pass
+
+        return False
 
 
 class CannotConnect(HomeAssistantError):
