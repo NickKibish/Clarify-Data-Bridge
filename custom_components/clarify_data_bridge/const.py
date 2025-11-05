@@ -19,6 +19,9 @@ DEFAULT_MAX_BATCH_SIZE = 100  # Maximum number of data points per batch
 DEFAULT_DATA_UPDATE_INTERVAL = 300  # 5 minutes - data retrieval interval
 DEFAULT_LOOKBACK_HOURS = 24  # Hours of historical data to retrieve
 DEFAULT_NAME = "Clarify Data Bridge"
+DEFAULT_PUBLISHING_STRATEGY = "manual"  # Don't auto-publish by default
+DEFAULT_AUTO_PUBLISH = False
+DEFAULT_VISIBLE = True
 
 # Configuration options
 CONF_BATCH_INTERVAL = "batch_interval"
@@ -33,6 +36,15 @@ CONF_EXCLUDE_PATTERNS = "exclude_patterns"
 CONF_MIN_PRIORITY = "min_priority"
 CONF_AUTO_DISCOVER = "auto_discover"
 CONF_PUBLISH_ON_DISCOVERY = "publish_on_discovery"
+
+# Publishing options
+CONF_PUBLISHING_STRATEGY = "publishing_strategy"
+CONF_PUBLISHING_RULES = "publishing_rules"
+CONF_AUTO_PUBLISH = "auto_publish"
+CONF_DEFAULT_VISIBLE = "default_visible"
+CONF_PUBLISH_PRIORITIES = "publish_priorities"
+CONF_PUBLISH_DEVICE_CLASSES = "publish_device_classes"
+CONF_PUBLISH_CATEGORIES = "publish_categories"
 
 # Error messages
 ERROR_CANNOT_CONNECT = "cannot_connect"
@@ -53,6 +65,10 @@ SERVICE_PUBLISH_ENTITIES = "publish_entities"
 SERVICE_PUBLISH_ALL_TRACKED = "publish_all_tracked"
 SERVICE_UPDATE_ITEM_VISIBILITY = "update_item_visibility"
 SERVICE_PUBLISH_DOMAIN = "publish_domain"
+SERVICE_PUBLISH_BY_PRIORITY = "publish_by_priority"
+SERVICE_PUBLISH_BY_DEVICE_CLASS = "publish_by_device_class"
+SERVICE_UNPUBLISH_ENTITY = "unpublish_entity"
+SERVICE_SYNC_PUBLISHING = "sync_publishing"
 
 # Service fields
 ATTR_ENTITY_ID = "entity_id"
@@ -60,6 +76,11 @@ ATTR_ENTITY_IDS = "entity_ids"
 ATTR_VISIBLE = "visible"
 ATTR_LABELS = "labels"
 ATTR_DOMAIN = "domain"
+ATTR_PRIORITY = "priority"
+ATTR_DEVICE_CLASS = "device_class"
+ATTR_DEVICE_CLASSES = "device_classes"
+ATTR_STRATEGY = "strategy"
+ATTR_FORCE = "force"
 
 # Clarify API constants
 CLARIFY_API_URL = "https://api.clarify.cloud/v1"
