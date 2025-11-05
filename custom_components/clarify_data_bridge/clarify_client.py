@@ -5,12 +5,15 @@ import json
 import logging
 import os
 import tempfile
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from pyclarify import Client, DataFrame
 from pyclarify.views.items import Item
 from pyclarify.views.signals import SignalInfo
 from pyclarify.query import Filter
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +45,7 @@ class ClarifyClient:
 
     def __init__(
         self,
+        hass: HomeAssistant,
         client_id: str,
         client_secret: str,
         integration_id: str,
@@ -50,6 +54,7 @@ class ClarifyClient:
         """Initialize the Clarify client with OAuth 2.0 credentials.
 
         Args:
+            hass: Home Assistant instance.
             client_id: OAuth 2.0 client ID.
             client_secret: OAuth 2.0 client secret.
             integration_id: Clarify integration ID.
@@ -59,6 +64,7 @@ class ClarifyClient:
             ClarifyAuthenticationError: If credentials are invalid.
             ClarifyConnectionError: If unable to connect to Clarify API.
         """
+        self.hass = hass
         self.client_id = client_id
         self.client_secret = client_secret
         self.integration_id = integration_id
@@ -131,20 +137,30 @@ class ClarifyClient:
             _LOGGER.debug("Credentials file created successfully")
 
             # Initialize pyclarify Client with file path
-            _LOGGER.debug("Initializing pyclarify Client")
-            self._client = Client(credentials=self._temp_credentials_file)
-            _LOGGER.info("pyclarify Client initialized")
+            # Run in executor since Client() may do blocking I/O
+            _LOGGER.debug("Initializing pyclarify Client with credentials file: %s", self._temp_credentials_file)
+            self._client = await self.hass.async_add_executor_job(
+                Client, self._temp_credentials_file
+            )
+            _LOGGER.info("pyclarify Client initialized successfully")
 
             # Make an actual API call to verify connection and credentials
             # This will trigger the OAuth 2.0 flow and validate credentials
+            # Run in executor since select_signals() makes blocking HTTP calls
             _LOGGER.info("Verifying connection by calling select_signals API")
             try:
-                response = self._client.select_signals(skip=0, limit=1)
+                # Use functools.partial to pass keyword arguments to executor
+                from functools import partial
+                response = await self.hass.async_add_executor_job(
+                    partial(self._client.select_signals, skip=0, limit=1)
+                )
                 _LOGGER.debug("API call successful, response type: %s", type(response))
 
-                if not isinstance(response, dict):
+                # pyclarify returns a Response object, not a dict
+                # Just check that we got a response (which means auth worked)
+                if response is None:
                     raise ClarifyConnectionError(
-                        f"Invalid response from Clarify API. Expected dict, got {type(response)}. "
+                        f"No response from Clarify API. "
                         f"This may indicate an API URL issue. Current URL: {self.api_url}"
                     )
 
@@ -215,13 +231,17 @@ class ClarifyClient:
         try:
             # Attempt a simple operation to verify connection and credentials
             # This will trigger OAuth flow and validate credentials
+            # Run in executor since select_signals() makes blocking HTTP calls
             _LOGGER.debug("Verifying Clarify API connection by selecting signals")
 
-            # Try to select signals with limit=1 to minimize data transfer
-            response = self._client.select_signals(skip=0, limit=1)
+            # Use functools.partial to pass keyword arguments to executor
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.select_signals, skip=0, limit=1)
+            )
 
-            # Check if response is valid
-            if not isinstance(response, dict):
+            # pyclarify returns a Response object, not a dict
+            if response is None:
                 raise ClarifyConnectionError("Invalid response from Clarify API")
 
             _LOGGER.info("Successfully verified Clarify API connection")

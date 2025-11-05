@@ -54,6 +54,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # Test Clarify API connection with OAuth 2.0 credentials
     try:
         client = ClarifyClient(
+            hass=hass,
             client_id=client_id,
             client_secret=client_secret,
             integration_id=integration_id,

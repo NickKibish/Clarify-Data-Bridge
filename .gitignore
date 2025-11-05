@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+cred.json
+test_clarify_connection.py
+requirements-test.txt
+
 # C extensions
 *.so
 

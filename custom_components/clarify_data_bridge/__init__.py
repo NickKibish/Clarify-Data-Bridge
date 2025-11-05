@@ -81,6 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Initialize Clarify API client with OAuth 2.0 credentials
     client = ClarifyClient(
+        hass=hass,
         client_id=client_id,
         client_secret=client_secret,
         integration_id=integration_id,
