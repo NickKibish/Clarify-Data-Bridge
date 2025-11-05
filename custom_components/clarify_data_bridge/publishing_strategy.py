@@ -12,7 +12,9 @@ from typing import Callable
 
 from homeassistant.core import HomeAssistant
 
-from .entity_selector import EntityMetadata, DataPriority, EntityCategory
+from .entity_selector import EntityMetadata, EntityCategory
+
+# DISABLED: # DataPriority removed - priority-based publishing temporarily disabled
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,8 +49,8 @@ class PublishingRule:
     description: str
 
     # Filtering criteria
-    min_priority: DataPriority | None = None
-    max_priority: DataPriority | None = None
+    # DISABLED: min_priority: DataPriority | None = None
+    # DISABLED: max_priority: DataPriority | None = None
     categories: list[EntityCategory] | None = None
     device_classes: list[str] | None = None
     domains: list[str] | None = None
@@ -121,8 +123,8 @@ class PublishingStrategyManager:
             PublishingRule(
                 name="High Priority Only",
                 description="Publish only high priority entities (energy, temperature, CO2, etc.)",
-                min_priority=DataPriority.HIGH,
-                max_priority=DataPriority.HIGH,
+                # DISABLED: min_priority=DataPriority.HIGH,
+                # DISABLED: max_priority=DataPriority.HIGH,
                 visible=True,
             )
         ],
@@ -131,7 +133,7 @@ class PublishingStrategyManager:
             PublishingRule(
                 name="Medium and High Priority",
                 description="Publish medium and high priority entities",
-                min_priority=DataPriority.HIGH,
+                # DISABLED: min_priority=DataPriority.HIGH,
                 visible=True,
             )
         ],
@@ -256,7 +258,7 @@ class PublishingStrategyManager:
             return rule.visible
 
         # Default based on priority
-        return entity.priority == DataPriority.HIGH
+        # DISABLED: return entity.priority == DataPriority.HIGH
 
     def get_additional_labels(
         self,
@@ -310,8 +312,8 @@ class PublishingStrategyManager:
 
     @staticmethod
     def create_priority_rule(
-        min_priority: DataPriority,
-        max_priority: DataPriority | None = None,
+        # DISABLED: min_priority: DataPriority,
+        # DISABLED: max_priority: DataPriority | None = None,
         visible: bool = True,
     ) -> PublishingRule:
         """Create a priority-based publishing rule.
@@ -466,15 +468,15 @@ def create_comprehensive_monitoring_rules() -> list[PublishingRule]:
         PublishingRule(
             name="High Priority Sensors",
             description="All high priority sensors visible",
-            min_priority=DataPriority.HIGH,
-            max_priority=DataPriority.HIGH,
+            # DISABLED: min_priority=DataPriority.HIGH,
+            # DISABLED: max_priority=DataPriority.HIGH,
             visible=True,
         ),
         PublishingRule(
             name="Medium Priority Sensors",
             description="Medium priority sensors hidden by default",
-            min_priority=DataPriority.MEDIUM,
-            max_priority=DataPriority.MEDIUM,
+            # DISABLED: min_priority=DataPriority.MEDIUM,
+            # DISABLED: max_priority=DataPriority.MEDIUM,
             visible=False,
         ),
     ]

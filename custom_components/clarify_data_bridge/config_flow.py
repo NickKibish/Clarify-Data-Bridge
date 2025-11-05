@@ -18,7 +18,7 @@ from .clarify_client import (
     ClarifyAuthenticationError,
     ClarifyConnectionError,
 )
-from .entity_selector import EntitySelector, DataPriority, EntityCategory
+from .entity_selector import EntitySelector, EntityMetadata, EntityCategory
 from .const import (
     DOMAIN,
     CONF_CLIENT_ID,
@@ -32,7 +32,7 @@ from .const import (
     CONF_EXCLUDE_DEVICE_CLASSES,
     CONF_INCLUDE_PATTERNS,
     CONF_EXCLUDE_PATTERNS,
-    CONF_MIN_PRIORITY,
+    CONF_SELECTED_ENTITIES,
     DEFAULT_NAME,
     DEFAULT_BATCH_INTERVAL,
     DEFAULT_MAX_BATCH_SIZE,
@@ -196,7 +196,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             priority_level = user_input.get("priority_level", "HIGH")
 
             # Set default configuration
-            self._data[CONF_MIN_PRIORITY] = priority_level
+            self._data[CONF_SELECTED_ENTITIES] = priority_level
             self._data[CONF_INCLUDE_DOMAINS] = SUPPORTED_DOMAINS
 
             return await self.async_step_preview()
@@ -219,7 +219,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Select entities by priority level."""
         if user_input is not None:
-            self._data[CONF_MIN_PRIORITY] = user_input.get("min_priority", "LOW")
+            self._data[CONF_SELECTED_ENTITIES] = user_input.get("min_priority", "LOW")
             self._data[CONF_INCLUDE_DOMAINS] = user_input.get("include_domains", SUPPORTED_DOMAINS)
 
             return await self.async_step_preview()
@@ -262,7 +262,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Select entities by domain."""
         if user_input is not None:
             self._data[CONF_INCLUDE_DOMAINS] = user_input.get("domains", [])
-            self._data[CONF_MIN_PRIORITY] = "LOW"
+            self._data[CONF_SELECTED_ENTITIES] = "LOW"
 
             # Ask if they want to refine by priority
             if user_input.get("refine_priority"):
@@ -304,7 +304,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             selected_classes = user_input.get("device_classes", [])
             self._data[CONF_INCLUDE_DEVICE_CLASSES] = selected_classes
-            self._data[CONF_MIN_PRIORITY] = "LOW"
+            self._data[CONF_SELECTED_ENTITIES] = "LOW"
 
             return await self.async_step_preview()
 
@@ -438,8 +438,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ]
 
             # Priority if not set
-            if CONF_MIN_PRIORITY not in self._data:
-                self._data[CONF_MIN_PRIORITY] = user_input.get("min_priority", "LOW")
+            if CONF_SELECTED_ENTITIES not in self._data:
+                self._data[CONF_SELECTED_ENTITIES] = user_input.get("min_priority", "LOW")
 
             return await self.async_step_preview()
 
@@ -482,7 +482,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self._entity_selector.async_setup()
 
         # Build discovery parameters from stored data
-        min_priority_str = self._data.get(CONF_MIN_PRIORITY, "LOW")
+        min_priority_str = self._data.get(CONF_SELECTED_ENTITIES, "LOW")
         try:
             min_priority = DataPriority[min_priority_str.upper()]
         except (KeyError, AttributeError):
@@ -593,7 +593,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Configure entity filtering."""
         if user_input is not None:
             new_data = dict(self.config_entry.data)
-            new_data[CONF_MIN_PRIORITY] = user_input.get("min_priority", "LOW")
+            new_data[CONF_SELECTED_ENTITIES] = user_input.get("min_priority", "LOW")
             new_data[CONF_INCLUDE_DOMAINS] = user_input.get("include_domains", SUPPORTED_DOMAINS)
             new_data[CONF_INCLUDE_DEVICE_CLASSES] = user_input.get("include_device_classes", [])
 
@@ -602,7 +602,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )
             return self.async_create_entry(title="", data={})
 
-        current_priority = self.config_entry.data.get(CONF_MIN_PRIORITY, "LOW")
+        current_priority = self.config_entry.data.get(CONF_SELECTED_ENTITIES, "LOW")
         current_domains = self.config_entry.data.get(CONF_INCLUDE_DOMAINS, SUPPORTED_DOMAINS)
         current_device_classes = self.config_entry.data.get(CONF_INCLUDE_DEVICE_CLASSES, [])
 

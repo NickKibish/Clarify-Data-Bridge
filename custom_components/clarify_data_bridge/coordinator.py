@@ -223,9 +223,8 @@ class ClarifyDataCoordinator:
         # Convert buffer entries to dataframe format
         data_to_send: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
 
-        for priority_level, entries in buffer_data.items():
-            for entry in entries:
-                data_to_send[entry.input_id].append((entry.timestamp, entry.value))
+        for entry in buffer_data:
+            data_to_send[entry.input_id].append((entry.timestamp, entry.value))
 
         # Also include any data from legacy buffer
         if self._data_buffer:

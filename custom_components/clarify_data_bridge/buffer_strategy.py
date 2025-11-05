@@ -10,8 +10,6 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .entity_selector import DataPriority
-
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -20,7 +18,6 @@ class BufferStrategy(Enum):
 
     TIME_BASED = "time"  # Flush every X seconds
     SIZE_BASED = "size"  # Flush when buffer reaches Y entries
-    PRIORITY_BASED = "priority"  # Flush high-priority immediately, batch others
     HYBRID = "hybrid"  # Combination of time and size
     ADAPTIVE = "adaptive"  # Adjust based on data rate
 
@@ -30,7 +27,6 @@ class FlushTrigger(Enum):
 
     TIME_INTERVAL = "time_interval"  # Regular time interval reached
     SIZE_LIMIT = "size_limit"  # Buffer size limit reached
-    PRIORITY = "priority"  # High priority data requires immediate send
     MANUAL = "manual"  # Manual flush requested
     SHUTDOWN = "shutdown"  # System shutdown
     ADAPTIVE = "adaptive"  # Adaptive strategy decision
@@ -43,7 +39,6 @@ class BufferEntry:
     input_id: str
     value: float
     timestamp: datetime
-    priority: DataPriority = DataPriority.LOW
     entity_id: str | None = None
     device_class: str | None = None
 
@@ -68,7 +63,6 @@ class BufferStrategyManager:
     Implements multiple buffering strategies:
     - Time-based: Flush every X seconds
     - Size-based: Flush when buffer reaches Y entries
-    - Priority-based: Immediate flush for high-priority, batch others
     - Hybrid: Combination of time and size
     - Adaptive: Adjust flush frequency based on data rate
     """
@@ -78,8 +72,6 @@ class BufferStrategyManager:
         strategy: BufferStrategy = BufferStrategy.HYBRID,
         time_interval: int = 300,  # 5 minutes
         size_limit: int = 100,
-        priority_immediate: bool = True,
-        priority_threshold: DataPriority = DataPriority.HIGH,
         adaptive_min_interval: int = 60,  # 1 minute
         adaptive_max_interval: int = 600,  # 10 minutes
     ) -> None:
@@ -89,23 +81,17 @@ class BufferStrategyManager:
             strategy: Buffering strategy to use.
             time_interval: Flush interval in seconds for time-based strategy.
             size_limit: Maximum buffer size for size-based strategy.
-            priority_immediate: Whether to flush high-priority data immediately.
-            priority_threshold: Minimum priority for immediate flush.
             adaptive_min_interval: Minimum interval for adaptive strategy.
             adaptive_max_interval: Maximum interval for adaptive strategy.
         """
         self.strategy = strategy
         self.time_interval = time_interval
         self.size_limit = size_limit
-        self.priority_immediate = priority_immediate
-        self.priority_threshold = priority_threshold
         self.adaptive_min_interval = adaptive_min_interval
         self.adaptive_max_interval = adaptive_max_interval
 
-        # Buffers separated by priority
-        self._high_priority_buffer: list[BufferEntry] = []
-        self._medium_priority_buffer: list[BufferEntry] = []
-        self._low_priority_buffer: list[BufferEntry] = []
+        # Unified buffer for all entries
+        self._buffer: list[BufferEntry] = []
 
         # Timing
         self._last_flush_time = dt_util.utcnow()
@@ -134,13 +120,8 @@ class BufferStrategyManager:
         Returns:
             FlushTrigger if buffer should be flushed, None otherwise.
         """
-        # Add to appropriate priority buffer
-        if entry.priority == DataPriority.HIGH:
-            self._high_priority_buffer.append(entry)
-        elif entry.priority == DataPriority.MEDIUM:
-            self._medium_priority_buffer.append(entry)
-        else:
-            self._low_priority_buffer.append(entry)
+        # Add to unified buffer
+        self._buffer.append(entry)
 
         # Update metrics
         self.metrics.total_entries += 1
@@ -156,30 +137,14 @@ class BufferStrategyManager:
                 self._entry_timestamps.pop(0)
 
         # Determine if flush is needed
-        return self._should_flush(entry)
+        return self._should_flush()
 
-    def _should_flush(self, latest_entry: BufferEntry | None = None) -> FlushTrigger | None:
+    def _should_flush(self) -> FlushTrigger | None:
         """Determine if buffer should be flushed.
-
-        Args:
-            latest_entry: Most recent entry added (for priority check).
 
         Returns:
             FlushTrigger if flush needed, None otherwise.
         """
-        # Priority-based immediate flush
-        if (
-            self.priority_immediate
-            and latest_entry
-            and latest_entry.priority.value >= self.priority_threshold.value
-        ):
-            _LOGGER.debug(
-                "Priority flush triggered for %s (priority: %s)",
-                latest_entry.entity_id,
-                latest_entry.priority.name,
-            )
-            return FlushTrigger.PRIORITY
-
         total_size = self.get_total_buffer_size()
 
         # Strategy-specific checks
@@ -188,13 +153,6 @@ class BufferStrategyManager:
 
         elif self.strategy == BufferStrategy.SIZE_BASED:
             return self._check_size_based(total_size)
-
-        elif self.strategy == BufferStrategy.PRIORITY_BASED:
-            # For priority-based, we already checked priority above
-            # Flush other priorities on size limit
-            if total_size >= self.size_limit:
-                return FlushTrigger.SIZE_LIMIT
-            return None
 
         elif self.strategy == BufferStrategy.HYBRID:
             # Check both time and size
@@ -296,39 +254,21 @@ class BufferStrategyManager:
     def get_flush_data(
         self,
         trigger: FlushTrigger,
-    ) -> dict[str, list[BufferEntry]]:
+    ) -> list[BufferEntry]:
         """Get data to flush based on trigger.
 
         Args:
             trigger: Flush trigger type.
 
         Returns:
-            Dictionary mapping priority level to list of entries.
+            List of buffer entries.
         """
-        data: dict[str, list[BufferEntry]] = {}
-
-        # For priority triggers, only flush high-priority buffer
-        if trigger == FlushTrigger.PRIORITY:
-            if self._high_priority_buffer:
-                data["high"] = self._high_priority_buffer.copy()
-                self._high_priority_buffer.clear()
-
-        # For other triggers, flush all buffers
-        else:
-            if self._high_priority_buffer:
-                data["high"] = self._high_priority_buffer.copy()
-                self._high_priority_buffer.clear()
-
-            if self._medium_priority_buffer:
-                data["medium"] = self._medium_priority_buffer.copy()
-                self._medium_priority_buffer.clear()
-
-            if self._low_priority_buffer:
-                data["low"] = self._low_priority_buffer.copy()
-                self._low_priority_buffer.clear()
+        # Get all entries from unified buffer
+        data = self._buffer.copy()
+        self._buffer.clear()
 
         # Update metrics
-        total_flushed = sum(len(entries) for entries in data.values())
+        total_flushed = len(data)
         self.metrics.flushes += 1
         self.metrics.flush_triggers[trigger.value] += 1
         self.metrics.last_flush_time = dt_util.utcnow()
@@ -344,44 +284,36 @@ class BufferStrategyManager:
         self._last_flush_time = dt_util.utcnow()
 
         _LOGGER.info(
-            "Flushing buffer: trigger=%s, total_entries=%d, priorities=%s",
+            "Flushing buffer: trigger=%s, total_entries=%d",
             trigger.value,
             total_flushed,
-            {k: len(v) for k, v in data.items()},
         )
 
         return data
 
     def get_total_buffer_size(self) -> int:
-        """Get total number of entries across all buffers."""
-        return (
-            len(self._high_priority_buffer)
-            + len(self._medium_priority_buffer)
-            + len(self._low_priority_buffer)
-        )
+        """Get total number of entries in buffer."""
+        return len(self._buffer)
 
     def get_buffer_sizes(self) -> dict[str, int]:
-        """Get buffer sizes by priority."""
+        """Get buffer size info."""
         return {
-            "high": len(self._high_priority_buffer),
-            "medium": len(self._medium_priority_buffer),
-            "low": len(self._low_priority_buffer),
             "total": self.get_total_buffer_size(),
         }
 
-    def manual_flush(self) -> dict[str, list[BufferEntry]]:
+    def manual_flush(self) -> list[BufferEntry]:
         """Manually trigger a buffer flush.
 
         Returns:
-            Dictionary mapping priority level to list of entries.
+            List of buffer entries.
         """
         return self.get_flush_data(FlushTrigger.MANUAL)
 
-    def shutdown_flush(self) -> dict[str, list[BufferEntry]]:
+    def shutdown_flush(self) -> list[BufferEntry]:
         """Flush all buffers on shutdown.
 
         Returns:
-            Dictionary mapping priority level to list of entries.
+            List of buffer entries.
         """
         return self.get_flush_data(FlushTrigger.SHUTDOWN)
 
@@ -414,161 +346,3 @@ class BufferStrategyManager:
     def reset_metrics(self) -> None:
         """Reset buffer metrics."""
         self.metrics = BufferMetrics()
-
-
-class PriorityQueue:
-    """Priority queue for managing entity updates by priority.
-
-    Separates high, medium, and low priority entities for
-    optimized processing and buffering.
-    """
-
-    def __init__(self) -> None:
-        """Initialize priority queue."""
-        self._queues: dict[DataPriority, list[BufferEntry]] = {
-            DataPriority.HIGH: [],
-            DataPriority.MEDIUM: [],
-            DataPriority.LOW: [],
-        }
-
-        # Track queue sizes over time
-        self._queue_stats: dict[DataPriority, dict[str, int]] = {
-            priority: {"total_added": 0, "total_removed": 0, "max_size": 0}
-            for priority in DataPriority
-        }
-
-    def add(self, entry: BufferEntry) -> None:
-        """Add entry to appropriate priority queue.
-
-        Args:
-            entry: Buffer entry to add.
-        """
-        priority = entry.priority
-        self._queues[priority].append(entry)
-
-        # Update stats
-        self._queue_stats[priority]["total_added"] += 1
-        current_size = len(self._queues[priority])
-        if current_size > self._queue_stats[priority]["max_size"]:
-            self._queue_stats[priority]["max_size"] = current_size
-
-    def get_high_priority(self, limit: int | None = None) -> list[BufferEntry]:
-        """Get high-priority entries.
-
-        Args:
-            limit: Maximum number of entries to return.
-
-        Returns:
-            List of high-priority entries.
-        """
-        return self._get_entries(DataPriority.HIGH, limit)
-
-    def get_medium_priority(self, limit: int | None = None) -> list[BufferEntry]:
-        """Get medium-priority entries.
-
-        Args:
-            limit: Maximum number of entries to return.
-
-        Returns:
-            List of medium-priority entries.
-        """
-        return self._get_entries(DataPriority.MEDIUM, limit)
-
-    def get_low_priority(self, limit: int | None = None) -> list[BufferEntry]:
-        """Get low-priority entries.
-
-        Args:
-            limit: Maximum number of entries to return.
-
-        Returns:
-            List of low-priority entries.
-        """
-        return self._get_entries(DataPriority.LOW, limit)
-
-    def get_all(self, limit: int | None = None) -> list[BufferEntry]:
-        """Get all entries (high priority first).
-
-        Args:
-            limit: Maximum number of entries to return.
-
-        Returns:
-            List of all entries, sorted by priority.
-        """
-        all_entries = []
-
-        # Add high priority first
-        all_entries.extend(self._queues[DataPriority.HIGH])
-
-        # Then medium
-        all_entries.extend(self._queues[DataPriority.MEDIUM])
-
-        # Then low
-        all_entries.extend(self._queues[DataPriority.LOW])
-
-        if limit:
-            return all_entries[:limit]
-
-        return all_entries
-
-    def _get_entries(
-        self,
-        priority: DataPriority,
-        limit: int | None = None,
-    ) -> list[BufferEntry]:
-        """Get entries from specific priority queue.
-
-        Args:
-            priority: Priority level.
-            limit: Maximum number to return.
-
-        Returns:
-            List of entries.
-        """
-        queue = self._queues[priority]
-
-        if limit is None or limit >= len(queue):
-            entries = queue.copy()
-            queue.clear()
-        else:
-            entries = queue[:limit]
-            del queue[:limit]
-
-        # Update stats
-        self._queue_stats[priority]["total_removed"] += len(entries)
-
-        return entries
-
-    def clear_all(self) -> None:
-        """Clear all queues."""
-        for queue in self._queues.values():
-            queue.clear()
-
-    def get_sizes(self) -> dict[str, int]:
-        """Get current queue sizes.
-
-        Returns:
-            Dictionary mapping priority names to sizes.
-        """
-        return {
-            priority.name: len(queue)
-            for priority, queue in self._queues.items()
-        }
-
-    def get_total_size(self) -> int:
-        """Get total entries across all queues."""
-        return sum(len(queue) for queue in self._queues.values())
-
-    def get_statistics(self) -> dict[str, Any]:
-        """Get queue statistics.
-
-        Returns:
-            Dictionary of statistics.
-        """
-        return {
-            "current_sizes": self.get_sizes(),
-            "total_size": self.get_total_size(),
-            "stats_by_priority": {
-                priority.name: stats
-                for priority, stats in self._queue_stats.items()
-            },
-        }
