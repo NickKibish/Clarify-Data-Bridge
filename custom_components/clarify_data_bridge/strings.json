@@ -24,5 +24,21 @@
     "abort": {
       "already_configured": "This integration ID is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Clarify Data Bridge",
+        "description": "Adjust batch processing settings for data transmission to Clarify.",
+        "data": {
+          "batch_interval": "Batch Interval (seconds)",
+          "max_batch_size": "Maximum Batch Size"
+        },
+        "data_description": {
+          "batch_interval": "How often to send batched data to Clarify (60-3600 seconds)",
+          "max_batch_size": "Maximum number of data points to accumulate before sending (10-1000)"
+        }
+      }
+    }
   }
 }

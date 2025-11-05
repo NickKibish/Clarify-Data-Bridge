@@ -13,12 +13,25 @@ from .clarify_client import (
     ClarifyAuthenticationError,
     ClarifyConnectionError,
 )
+from .coordinator import ClarifyDataCoordinator
+from .entity_listener import ClarifyEntityListener
+from .signal_manager import ClarifySignalManager
 from .const import (
     DOMAIN,
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_INTEGRATION_ID,
+    CONF_BATCH_INTERVAL,
+    CONF_MAX_BATCH_SIZE,
+    CONF_INCLUDE_DOMAINS,
+    CONF_EXCLUDE_ENTITIES,
+    DEFAULT_BATCH_INTERVAL,
+    DEFAULT_MAX_BATCH_SIZE,
+    SUPPORTED_DOMAINS,
     ENTRY_DATA_CLIENT,
+    ENTRY_DATA_COORDINATOR,
+    ENTRY_DATA_LISTENER,
+    ENTRY_DATA_SIGNAL_MANAGER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     client_id = entry.data[CONF_CLIENT_ID]
     client_secret = entry.data[CONF_CLIENT_SECRET]
     integration_id = entry.data[CONF_INTEGRATION_ID]
+
+    # Get optional configuration
+    batch_interval = entry.data.get(CONF_BATCH_INTERVAL, DEFAULT_BATCH_INTERVAL)
+    max_batch_size = entry.data.get(CONF_MAX_BATCH_SIZE, DEFAULT_MAX_BATCH_SIZE)
+    include_domains = entry.data.get(CONF_INCLUDE_DOMAINS, SUPPORTED_DOMAINS)
+    exclude_entities = entry.data.get(CONF_EXCLUDE_ENTITIES, [])
 
     _LOGGER.debug("Setting up Clarify Data Bridge integration for: %s", integration_id)
 
@@ -64,16 +83,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Unexpected error setting up integration %s: %s", integration_id, err)
         raise ConfigEntryNotReady(f"Setup failed: {err}") from err
 
-    # Store client
+    # Initialize data coordinator
+    coordinator = ClarifyDataCoordinator(
+        hass=hass,
+        client=client,
+        batch_interval=batch_interval,
+        max_batch_size=max_batch_size,
+    )
+
+    # Initialize signal manager
+    signal_manager = ClarifySignalManager(
+        hass=hass,
+        client=client,
+        integration_id=integration_id,
+    )
+
+    # Initialize entity listener
+    listener = ClarifyEntityListener(
+        hass=hass,
+        coordinator=coordinator,
+        signal_manager=signal_manager,
+        include_domains=include_domains,
+        exclude_entities=exclude_entities,
+    )
+
+    # Store components
     hass.data[DOMAIN][entry.entry_id] = {
         ENTRY_DATA_CLIENT: client,
+        ENTRY_DATA_COORDINATOR: coordinator,
+        ENTRY_DATA_SIGNAL_MANAGER: signal_manager,
+        ENTRY_DATA_LISTENER: listener,
     }
+
+    # Start coordinator and listener
+    await coordinator.start()
+    await listener.async_start()
 
     # Set up platforms
     if PLATFORMS:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _LOGGER.info("Clarify Data Bridge integration setup completed for: %s", integration_id)
+    _LOGGER.info(
+        "Clarify Data Bridge integration setup completed for: %s (tracking %d entities)",
+        integration_id,
+        listener.tracked_entity_count,
+    )
     return True
 
 
@@ -91,13 +145,28 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if PLATFORMS:
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    # Clean up client resources
+    # Clean up resources
     if unload_ok:
         entry_data = hass.data[DOMAIN].pop(entry.entry_id)
+
+        # Stop listener
+        listener = entry_data.get(ENTRY_DATA_LISTENER)
+        if listener:
+            await listener.async_stop()
+            _LOGGER.debug("Stopped entity listener")
+
+        # Stop coordinator (sends remaining data)
+        coordinator = entry_data.get(ENTRY_DATA_COORDINATOR)
+        if coordinator:
+            await coordinator.stop()
+            _LOGGER.debug("Stopped data coordinator")
+
+        # Close client
         client = entry_data.get(ENTRY_DATA_CLIENT)
         if client:
             client.close()
             _LOGGER.debug("Closed Clarify client connection")
+
         _LOGGER.info("Clarify Data Bridge integration unloaded successfully")
 
     return unload_ok

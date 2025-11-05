@@ -14,7 +14,16 @@ CONF_API_KEY = "api_key"
 
 # Default values
 DEFAULT_UPDATE_INTERVAL = 60  # seconds
+DEFAULT_BATCH_INTERVAL = 300  # 5 minutes - batch data insertion interval
+DEFAULT_MAX_BATCH_SIZE = 100  # Maximum number of data points per batch
 DEFAULT_NAME = "Clarify Data Bridge"
+
+# Configuration options
+CONF_BATCH_INTERVAL = "batch_interval"
+CONF_MAX_BATCH_SIZE = "max_batch_size"
+CONF_ENTITY_FILTER = "entity_filter"
+CONF_INCLUDE_DOMAINS = "include_domains"
+CONF_EXCLUDE_ENTITIES = "exclude_entities"
 
 # Error messages
 ERROR_CANNOT_CONNECT = "cannot_connect"
@@ -24,6 +33,36 @@ ERROR_UNKNOWN = "unknown"
 # Entry data keys
 ENTRY_DATA_CLIENT = "client"
 ENTRY_DATA_COORDINATOR = "coordinator"
+ENTRY_DATA_LISTENER = "listener"
+ENTRY_DATA_SIGNAL_MANAGER = "signal_manager"
 
 # Clarify API constants
 CLARIFY_API_URL = "https://api.clarify.io/v1"
+
+# Supported Home Assistant domains for data collection
+SUPPORTED_DOMAINS = [
+    "sensor",
+    "binary_sensor",
+    "light",
+    "switch",
+    "climate",
+    "cover",
+    "fan",
+    "lock",
+    "media_player",
+    "weather",
+]
+
+# State attributes to track
+NUMERIC_ATTRIBUTES = [
+    "temperature",
+    "humidity",
+    "pressure",
+    "battery",
+    "power",
+    "energy",
+    "voltage",
+    "current",
+    "brightness",
+    "speed",
+]

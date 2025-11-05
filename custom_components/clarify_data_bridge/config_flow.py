@@ -21,7 +21,11 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_INTEGRATION_ID,
+    CONF_BATCH_INTERVAL,
+    CONF_MAX_BATCH_SIZE,
     DEFAULT_NAME,
+    DEFAULT_BATCH_INTERVAL,
+    DEFAULT_MAX_BATCH_SIZE,
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
     ERROR_UNKNOWN,
@@ -79,6 +83,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @staticmethod
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+        """Get the options flow for this handler."""
+        return OptionsFlowHandler(config_entry)
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -106,6 +115,47 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
+        )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for Clarify Data Bridge."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        # Get current values
+        current_batch_interval = self.config_entry.data.get(
+            CONF_BATCH_INTERVAL, DEFAULT_BATCH_INTERVAL
+        )
+        current_max_batch_size = self.config_entry.data.get(
+            CONF_MAX_BATCH_SIZE, DEFAULT_MAX_BATCH_SIZE
+        )
+
+        options_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_BATCH_INTERVAL,
+                    default=current_batch_interval,
+                ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
+                vol.Optional(
+                    CONF_MAX_BATCH_SIZE,
+                    default=current_max_batch_size,
+                ): vol.All(vol.Coerce(int), vol.Range(min=10, max=1000)),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=options_schema,
         )
 
 

@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from pyclarify import Client
-from pyclarify.client import APIClient
+from pyclarify import Client, DataFrame
+from pyclarify.views.signals import SignalInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -163,7 +163,8 @@ class ClarifyClient:
             raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
 
         try:
-            _LOGGER.debug("Inserting data to Clarify: %s", data)
+            _LOGGER.debug("Inserting data to Clarify: %d timestamps, %d series",
+                         len(data.get("times", [])), len(data.get("series", {})))
             response = self._client.insert(data)
             _LOGGER.info("Successfully inserted data to Clarify")
             return response
@@ -172,11 +173,44 @@ class ClarifyClient:
             _LOGGER.error("Failed to insert data: %s", err)
             raise ClarifyConnectionError(f"Data insertion failed: {err}") from err
 
-    async def async_save_signals(self, signals: dict[str, Any]) -> dict[str, Any]:
+    async def async_insert_dataframe(self, dataframe: DataFrame) -> dict[str, Any]:
+        """Insert time-series data using pyclarify DataFrame.
+
+        Args:
+            dataframe: pyclarify DataFrame containing times and series data.
+
+        Returns:
+            Response from Clarify API.
+
+        Raises:
+            ClarifyConnectionError: If not connected or insertion fails.
+        """
+        if self._client is None:
+            raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
+
+        try:
+            _LOGGER.debug("Inserting DataFrame to Clarify: %d timestamps, %d series",
+                         len(dataframe.times), len(dataframe.series))
+            response = self._client.insert(dataframe)
+            _LOGGER.info("Successfully inserted DataFrame to Clarify")
+            return response
+
+        except Exception as err:
+            _LOGGER.error("Failed to insert DataFrame: %s", err)
+            raise ClarifyConnectionError(f"DataFrame insertion failed: {err}") from err
+
+    async def async_save_signals(
+        self,
+        input_ids: list[str],
+        signals: list[SignalInfo],
+        create_only: bool = False,
+    ) -> dict[str, Any]:
         """Save signal definitions to Clarify.
 
         Args:
-            signals: Dictionary of signal definitions.
+            input_ids: List of unique input IDs for the signals.
+            signals: List of SignalInfo objects with metadata.
+            create_only: If True, only create new signals, don't update existing ones.
 
         Returns:
             Response from Clarify API.
@@ -187,15 +221,57 @@ class ClarifyClient:
         if self._client is None:
             raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
 
+        if len(input_ids) != len(signals):
+            raise ValueError("Number of input_ids must match number of signals")
+
         try:
-            _LOGGER.debug("Saving signals to Clarify: %s", signals)
-            response = self._client.save_signals(signals)
-            _LOGGER.info("Successfully saved signals to Clarify")
+            # Build params for save_signals
+            params = {
+                "inputs": {input_id: signal for input_id, signal in zip(input_ids, signals)},
+                "createOnly": create_only,
+            }
+
+            _LOGGER.debug("Saving %d signals to Clarify", len(input_ids))
+            response = self._client.save_signals(params=params)
+            _LOGGER.info("Successfully saved %d signals to Clarify", len(input_ids))
             return response
 
         except Exception as err:
             _LOGGER.error("Failed to save signals: %s", err)
             raise ClarifyConnectionError(f"Signal save failed: {err}") from err
+
+    async def async_create_signal(
+        self,
+        input_id: str,
+        name: str,
+        description: str | None = None,
+        labels: dict[str, list[str]] | None = None,
+    ) -> dict[str, Any]:
+        """Create a single signal with metadata.
+
+        Args:
+            input_id: Unique input ID for the signal.
+            name: Human-readable name for the signal.
+            description: Optional description of the signal.
+            labels: Optional dictionary of labels for categorization.
+
+        Returns:
+            Response from Clarify API.
+
+        Raises:
+            ClarifyConnectionError: If not connected or creation fails.
+        """
+        signal = SignalInfo(
+            name=name,
+            description=description or "",
+            labels=labels or {},
+        )
+
+        return await self.async_save_signals(
+            input_ids=[input_id],
+            signals=[signal],
+            create_only=False,
+        )
 
     @property
     def is_connected(self) -> bool:
