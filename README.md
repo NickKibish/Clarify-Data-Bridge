@@ -9,6 +9,7 @@ This integration provides **intelligent, automated data streaming** from Home As
 - **Automatic Entity Discovery**: Finds all numeric sensors and devices in your home
 - **Smart Classification**: Prioritizes entities by data value (energy, temperature, etc.)
 - **Intelligent Filtering**: Advanced filtering by domain, device class, priority, and patterns
+- **Auto-Publishing**: Automatically publishes signals as Clarify items using flexible strategies
 - **Rich Metadata**: Extracts device info, locations (areas), and comprehensive labels
 - **Efficient Batching**: Optimized data transmission with configurable batch sizes
 - **Multi-Attribute Support**: Tracks multiple values from single entities (e.g., temp + humidity)
@@ -147,11 +148,21 @@ clarify_data_bridge:
 - **OAuth 2.0 authentication**: Secure credentials management
 - **Connection monitoring**: Automatic reconnection on failures
 
+### 🚀 Intelligent Auto-Publishing
+- **8 publishing strategies**: Manual, all, priority-based, category, device class, domain, and custom
+- **Rule-based publishing**: Define custom rules for automatic item publishing
+- **Visibility control**: Publish items as visible or hidden
+- **Enhanced metadata**: Automatic device info, areas, and labels
+- **Auto-publish tracking**: Know which items were automatically published
+- **Flexible configuration**: Per-rule visibility and labeling
+
 ### 🔧 Services for Manual Control
 - `publish_entity`: Publish single entity as Clarify item
 - `publish_entities`: Publish multiple entities
 - `publish_all_tracked`: Publish all tracked entities
 - `publish_domain`: Publish all entities in a domain
+- `publish_by_priority`: Publish entities by priority level
+- `publish_by_device_class`: Publish entities by device class
 - `update_item_visibility`: Toggle item visibility in Clarify
 
 ### 📈 Data Retrieval
@@ -169,6 +180,7 @@ clarify_data_bridge:
 
 - **[Configuration UI Guide](./CONFIG_UI.md)**: Complete guide to the configuration interface with screenshots and examples
 - **[Entity Selection Guide](./ENTITY_SELECTION.md)**: Comprehensive guide to entity filtering, classification, and configuration
+- **[Publishing Strategies](./PUBLISHING.md)**: Guide to automatic publishing of signals as Clarify.io items
 - **Configuration Examples**: See CONFIG_UI.md for UI examples and ENTITY_SELECTION.md for YAML examples
 - **API Reference**: Entity metadata structure and priority levels
 
