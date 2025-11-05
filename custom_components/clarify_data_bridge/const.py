@@ -65,6 +65,30 @@ CONF_RETRY_MAX_DELAY = "retry_max_delay"
 CONF_RETRY_QUEUE_SIZE = "retry_queue_size"
 CONF_ENABLE_RETRY = "enable_retry"
 
+# Performance tuning configuration
+CONF_PERFORMANCE_PROFILE = "performance_profile"
+CONF_MAX_CONCURRENT_REQUESTS = "max_concurrent_requests"
+CONF_MEMORY_LIMIT_MB = "memory_limit_mb"
+CONF_ENABLE_AGGREGATION = "enable_aggregation"
+CONF_AGGREGATION_WINDOW = "aggregation_window"
+
+# Configuration templates
+CONF_APPLY_TEMPLATE = "apply_template"
+CONF_ENTITY_CONFIGS = "entity_configs"
+
+# Health monitoring
+CONF_ENABLE_HEALTH_MONITORING = "enable_health_monitoring"
+CONF_HEALTH_CHECK_INTERVAL = "health_check_interval"
+
+# Default performance values
+DEFAULT_PERFORMANCE_PROFILE = "balanced"
+DEFAULT_MAX_CONCURRENT_REQUESTS = 2
+DEFAULT_MEMORY_LIMIT_MB = 100
+DEFAULT_ENABLE_AGGREGATION = False
+DEFAULT_AGGREGATION_WINDOW = 300
+DEFAULT_ENABLE_HEALTH_MONITORING = True
+DEFAULT_HEALTH_CHECK_INTERVAL = 60
+
 # Publishing options
 CONF_PUBLISHING_STRATEGY = "publishing_strategy"
 CONF_PUBLISHING_RULES = "publishing_rules"
