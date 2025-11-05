@@ -110,6 +110,10 @@ ENTRY_DATA_LISTENER = "listener"
 ENTRY_DATA_SIGNAL_MANAGER = "signal_manager"
 ENTRY_DATA_ITEM_MANAGER = "item_manager"
 ENTRY_DATA_DATA_UPDATE_COORDINATOR = "data_update_coordinator"
+ENTRY_DATA_HISTORICAL_SYNC = "historical_sync"
+ENTRY_DATA_CONFIG_MANAGER = "config_manager"
+ENTRY_DATA_PERFORMANCE_MANAGER = "performance_manager"
+ENTRY_DATA_HEALTH_MONITOR = "health_monitor"
 
 # Service names
 SERVICE_PUBLISH_ENTITY = "publish_entity"
@@ -270,3 +274,68 @@ BINARY_DEVICE_CLASSES = {
     "vibration",
     "window",
 }
+
+# ============================================================================
+# Phase 7: Advanced Features
+# ============================================================================
+
+# Service names
+SERVICE_SYNC_HISTORICAL = "sync_historical"
+SERVICE_FLUSH_BUFFER = "flush_buffer"
+SERVICE_APPLY_TEMPLATE = "apply_template"
+SERVICE_SET_ENTITY_CONFIG = "set_entity_config"
+SERVICE_SET_PERFORMANCE_PROFILE = "set_performance_profile"
+SERVICE_GET_HEALTH_REPORT = "get_health_report"
+SERVICE_RESET_STATISTICS = "reset_statistics"
+
+# Data aggregation
+DEFAULT_AGGREGATION_METHOD = "none"
+DEFAULT_AGGREGATION_WINDOW = 300  # 5 minutes
+DEFAULT_MIN_CHANGE_THRESHOLD = 0.01  # 1% change
+
+# Available aggregation methods
+AGGREGATION_METHODS = [
+    "none",
+    "average",
+    "median",
+    "min",
+    "max",
+    "sum",
+    "first",
+    "last",
+    "count",
+    "change_only",
+]
+
+# Configuration templates
+AVAILABLE_TEMPLATES = [
+    "energy_monitoring",
+    "environmental_monitoring",
+    "hvac_monitoring",
+    "binary_sensor",
+    "motion_analytics",
+    "lighting_control",
+    "comprehensive",
+    "real_time_critical",
+]
+
+# Performance profiles
+AVAILABLE_PROFILES = [
+    "minimal",
+    "balanced",
+    "high_performance",
+    "real_time",
+]
+
+# Historical sync defaults
+DEFAULT_HISTORICAL_BATCH_SIZE = 1000
+DEFAULT_HISTORICAL_BATCH_DELAY = 2.0  # seconds
+MAX_HISTORICAL_BATCH_SIZE = 10000
+MIN_HISTORICAL_BATCH_DELAY = 0.5
+
+# Automation event types
+EVENT_DATA_SYNCED = f"{DOMAIN}_data_synced"
+EVENT_BUFFER_FLUSHED = f"{DOMAIN}_buffer_flushed"
+EVENT_TRANSMISSION_SUCCESS = f"{DOMAIN}_transmission_success"
+EVENT_TRANSMISSION_FAILED = f"{DOMAIN}_transmission_failed"
+EVENT_HEALTH_STATUS_CHANGED = f"{DOMAIN}_health_status_changed"
