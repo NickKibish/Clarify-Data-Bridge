@@ -543,8 +543,8 @@ class ClarifyClient:
         self,
         filter_query: Filter | None = None,
         include: list[str] | None = None,
-        not_before: str | None = None,
-        before: str | None = None,
+        gte: str | None = None,
+        lt: str | None = None,
         rollup: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve time series data from Clarify items.
@@ -552,8 +552,8 @@ class ClarifyClient:
         Args:
             filter_query: Filter to select which items to retrieve data for.
             include: List of relationships to include (e.g., ["item"]).
-            not_before: ISO 8601 timestamp for start of time range.
-            before: ISO 8601 timestamp for end of time range.
+            gte: ISO 8601 timestamp for start of time range (greater than or equal).
+            lt: ISO 8601 timestamp for end of time range (less than).
             rollup: Rollup period (e.g., "PT1H" for 1 hour).
 
         Returns:
@@ -567,9 +567,9 @@ class ClarifyClient:
 
         try:
             _LOGGER.debug(
-                "Retrieving data frame: not_before=%s, before=%s, rollup=%s",
-                not_before,
-                before,
+                "Retrieving data frame: gte=%s, lt=%s, rollup=%s",
+                gte,
+                lt,
                 rollup,
             )
 
@@ -578,10 +578,10 @@ class ClarifyClient:
                 params["filter"] = filter_query
             if include:
                 params["include"] = include
-            if not_before:
-                params["notBefore"] = not_before
-            if before:
-                params["before"] = before
+            if gte:
+                params["gte"] = gte
+            if lt:
+                params["lt"] = lt
             if rollup:
                 params["rollup"] = rollup
 

@@ -15,11 +15,10 @@ from homeassistant.const import (
     STATE_NOT_HOME,
     STATE_OPEN,
     STATE_CLOSED,
-    STATE_LOCKED,
-    STATE_UNLOCKED,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
+from homeassistant.components.lock import LockState
 from homeassistant.core import State
 from homeassistant.util import dt as dt_util
 
@@ -71,8 +70,8 @@ class DataValidator:
         STATE_NOT_HOME: 0.0,
         STATE_OPEN: 1.0,
         STATE_CLOSED: 0.0,
-        STATE_LOCKED: 1.0,
-        STATE_UNLOCKED: 0.0,
+        LockState.LOCKED: 1.0,
+        LockState.UNLOCKED: 0.0,
         "true": 1.0,
         "false": 0.0,
         "yes": 1.0,

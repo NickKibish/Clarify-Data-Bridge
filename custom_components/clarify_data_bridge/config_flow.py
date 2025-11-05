@@ -538,7 +538,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        # Note: self.config_entry is automatically set by the parent class
+        # Setting it explicitly is deprecated as of HA 2025.12
         self._entity_selector: EntitySelector | None = None
 
     async def async_step_init(

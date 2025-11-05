@@ -92,6 +92,29 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config entry to new version."""
+    _LOGGER.info("Migrating Clarify Data Bridge config entry from version %s", entry.version)
+
+    # Version 1 is the initial version with proper versioning
+    # Entries without a version are migrated to version 1
+    if entry.version == 1:
+        # Already at current version
+        return True
+
+    # Migrate from no version to version 1
+    if entry.version is None or entry.version < 1:
+        _LOGGER.info("Migrating config entry to version 1")
+        # No data changes needed, just update version
+        hass.config_entries.async_update_entry(entry, version=1)
+        _LOGGER.info("Migration to version 1 complete")
+        return True
+
+    # Unknown version
+    _LOGGER.error("Unknown config entry version %s", entry.version)
+    return False
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Clarify Data Bridge from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -201,14 +224,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     historical_sync = HistoricalDataSync(
         hass=hass,
         client=client,
-        coordinator=coordinator,
+        signal_manager=signal_manager,
     )
 
-    config_manager = ConfigurationManager(hass=hass)
+    config_manager = ConfigurationManager()
 
-    performance_manager = PerformanceManager(hass=hass)
+    performance_manager = PerformanceManager()
 
-    health_monitor = IntegrationHealthMonitor(hass=hass)
+    health_monitor = IntegrationHealthMonitor()
 
     # Initialize Phase 8: Security and Privacy managers
     credential_manager = CredentialManager(hass=hass)
@@ -327,7 +350,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def _async_register_services(hass: HomeAssistant) -> None:
     """Register integration services."""
     import voluptuous as vol
-    from homeassistant import config_validation as cv
+    from homeassistant.helpers import config_validation as cv
 
     async def handle_publish_entity(call):
         """Handle publish_entity service call."""
