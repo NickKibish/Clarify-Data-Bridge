@@ -20,6 +20,7 @@ from .data_update_coordinator import ClarifyDataUpdateCoordinator
 from .entity_listener import ClarifyEntityListener
 from .signal_manager import ClarifySignalManager
 from .item_manager import ClarifyItemManager
+from .entity_selector import EntitySelector, DataPriority
 from .const import (
     DOMAIN,
     CONF_CLIENT_ID,
@@ -29,6 +30,11 @@ from .const import (
     CONF_MAX_BATCH_SIZE,
     CONF_INCLUDE_DOMAINS,
     CONF_EXCLUDE_ENTITIES,
+    CONF_INCLUDE_DEVICE_CLASSES,
+    CONF_EXCLUDE_DEVICE_CLASSES,
+    CONF_INCLUDE_PATTERNS,
+    CONF_EXCLUDE_PATTERNS,
+    CONF_MIN_PRIORITY,
     DEFAULT_BATCH_INTERVAL,
     DEFAULT_MAX_BATCH_SIZE,
     DEFAULT_DATA_UPDATE_INTERVAL,
@@ -76,6 +82,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     max_batch_size = entry.data.get(CONF_MAX_BATCH_SIZE, DEFAULT_MAX_BATCH_SIZE)
     include_domains = entry.data.get(CONF_INCLUDE_DOMAINS, SUPPORTED_DOMAINS)
     exclude_entities = entry.data.get(CONF_EXCLUDE_ENTITIES, [])
+    include_device_classes = entry.data.get(CONF_INCLUDE_DEVICE_CLASSES)
+    exclude_device_classes = entry.data.get(CONF_EXCLUDE_DEVICE_CLASSES)
+    include_patterns = entry.data.get(CONF_INCLUDE_PATTERNS)
+    exclude_patterns = entry.data.get(CONF_EXCLUDE_PATTERNS)
+    min_priority_str = entry.data.get(CONF_MIN_PRIORITY, "LOW")
+
+    # Parse priority level
+    try:
+        min_priority = DataPriority[min_priority_str.upper()]
+    except (KeyError, AttributeError):
+        min_priority = DataPriority.LOW
+        _LOGGER.warning("Invalid min_priority '%s', using LOW", min_priority_str)
 
     _LOGGER.debug("Setting up Clarify Data Bridge integration for: %s", integration_id)
 
@@ -102,6 +120,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Unexpected error setting up integration %s: %s", integration_id, err)
         raise ConfigEntryNotReady(f"Setup failed: {err}") from err
 
+    # Initialize entity selector for advanced entity discovery
+    entity_selector = EntitySelector(hass=hass)
+    await entity_selector.async_setup()
+    _LOGGER.debug("Entity selector initialized")
+
     # Initialize data coordinator
     coordinator = ClarifyDataCoordinator(
         hass=hass,
@@ -110,20 +133,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         max_batch_size=max_batch_size,
     )
 
-    # Initialize signal manager
+    # Initialize signal manager with entity selector for enhanced metadata
     signal_manager = ClarifySignalManager(
         hass=hass,
         client=client,
         integration_id=integration_id,
+        entity_selector=entity_selector,
     )
 
-    # Initialize entity listener
+    # Initialize entity listener with advanced discovery options
     listener = ClarifyEntityListener(
         hass=hass,
         coordinator=coordinator,
         signal_manager=signal_manager,
+        entity_selector=entity_selector,
         include_domains=include_domains,
         exclude_entities=exclude_entities,
+        include_device_classes=include_device_classes,
+        exclude_device_classes=exclude_device_classes,
+        include_patterns=include_patterns,
+        exclude_patterns=exclude_patterns,
+        min_priority=min_priority,
     )
 
     # Initialize item manager

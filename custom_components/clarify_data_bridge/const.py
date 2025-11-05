@@ -26,6 +26,13 @@ CONF_MAX_BATCH_SIZE = "max_batch_size"
 CONF_ENTITY_FILTER = "entity_filter"
 CONF_INCLUDE_DOMAINS = "include_domains"
 CONF_EXCLUDE_ENTITIES = "exclude_entities"
+CONF_INCLUDE_DEVICE_CLASSES = "include_device_classes"
+CONF_EXCLUDE_DEVICE_CLASSES = "exclude_device_classes"
+CONF_INCLUDE_PATTERNS = "include_patterns"
+CONF_EXCLUDE_PATTERNS = "exclude_patterns"
+CONF_MIN_PRIORITY = "min_priority"
+CONF_AUTO_DISCOVER = "auto_discover"
+CONF_PUBLISH_ON_DISCOVERY = "publish_on_discovery"
 
 # Error messages
 ERROR_CANNOT_CONNECT = "cannot_connect"
@@ -73,14 +80,120 @@ SUPPORTED_DOMAINS = [
 
 # State attributes to track
 NUMERIC_ATTRIBUTES = [
+    # Temperature
     "temperature",
+    "current_temperature",
+    "target_temperature",
+    "target_temp_high",
+    "target_temp_low",
+    # Climate
     "humidity",
+    "current_humidity",
+    "target_humidity",
     "pressure",
-    "battery",
+    "wind_speed",
+    "wind_bearing",
+    # Power & Energy
     "power",
     "energy",
     "voltage",
     "current",
+    "power_factor",
+    "apparent_power",
+    "reactive_power",
+    # Battery
+    "battery",
+    "battery_level",
+    # Light
     "brightness",
+    "color_temp",
+    "kelvin",
+    # Media
+    "volume_level",
+    "media_position",
+    # HVAC
+    "fan_speed",
+    # Other
     "speed",
+    "position",
+    "tilt_position",
 ]
+
+# High priority device classes for time-series data
+HIGH_PRIORITY_DEVICE_CLASSES = {
+    # Energy & Power
+    "energy",
+    "power",
+    "apparent_power",
+    "reactive_power",
+    "power_factor",
+    "voltage",
+    "current",
+    "energy_storage",
+    # Environmental
+    "temperature",
+    "humidity",
+    "pressure",
+    "atmospheric_pressure",
+    "pm25",
+    "pm10",
+    "carbon_dioxide",
+    "carbon_monoxide",
+    "aqi",
+    "gas",
+    "nitrogen_dioxide",
+    "nitrogen_monoxide",
+    "ozone",
+    "sulphur_dioxide",
+    "volatile_organic_compounds",
+    # Resource monitoring
+    "battery",
+    "data_rate",
+    "data_size",
+    "frequency",
+    "monetary",
+    "weight",
+}
+
+# Medium priority device classes
+MEDIUM_PRIORITY_DEVICE_CLASSES = {
+    "illuminance",
+    "distance",
+    "speed",
+    "duration",
+    "brightness",
+    "volume",
+    "sound_pressure",
+    "signal_strength",
+    "timestamp",
+}
+
+# Device classes for binary sensors (convertible to 0/1)
+BINARY_DEVICE_CLASSES = {
+    "battery_charging",
+    "cold",
+    "connectivity",
+    "door",
+    "garage_door",
+    "gas",
+    "heat",
+    "light",
+    "lock",
+    "moisture",
+    "motion",
+    "moving",
+    "occupancy",
+    "opening",
+    "plug",
+    "power",
+    "presence",
+    "problem",
+    "running",
+    "safety",
+    "smoke",
+    "sound",
+    "tamper",
+    "update",
+    "vibration",
+    "window",
+}

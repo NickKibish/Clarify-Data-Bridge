@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .coordinator import ClarifyDataCoordinator
 from .signal_manager import ClarifySignalManager
+from .entity_selector import EntitySelector, EntityMetadata, DataPriority
 from .const import SUPPORTED_DOMAINS, NUMERIC_ATTRIBUTES
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,8 +32,14 @@ class ClarifyEntityListener:
         hass: HomeAssistant,
         coordinator: ClarifyDataCoordinator,
         signal_manager: ClarifySignalManager,
+        entity_selector: EntitySelector | None = None,
         include_domains: list[str] | None = None,
         exclude_entities: list[str] | None = None,
+        include_device_classes: list[str] | None = None,
+        exclude_device_classes: list[str] | None = None,
+        include_patterns: list[str] | None = None,
+        exclude_patterns: list[str] | None = None,
+        min_priority: DataPriority = DataPriority.LOW,
     ) -> None:
         """Initialize the entity listener.
 
@@ -40,15 +47,31 @@ class ClarifyEntityListener:
             hass: Home Assistant instance.
             coordinator: Data coordinator for batch processing.
             signal_manager: Signal manager for metadata.
+            entity_selector: Optional EntitySelector for advanced entity discovery.
             include_domains: List of domains to include (default: all supported).
             exclude_entities: List of entity IDs to exclude.
+            include_device_classes: List of device classes to include.
+            exclude_device_classes: List of device classes to exclude.
+            include_patterns: Regex patterns for entity IDs to include.
+            exclude_patterns: Regex patterns for entity IDs to exclude.
+            min_priority: Minimum priority level for entities.
         """
         self.hass = hass
         self.coordinator = coordinator
         self.signal_manager = signal_manager
+        self.entity_selector = entity_selector
 
+        # Filtering options
         self.include_domains = include_domains or SUPPORTED_DOMAINS
         self.exclude_entities = set(exclude_entities or [])
+        self.include_device_classes = include_device_classes
+        self.exclude_device_classes = exclude_device_classes
+        self.include_patterns = include_patterns
+        self.exclude_patterns = exclude_patterns
+        self.min_priority = min_priority
+
+        # Track discovered entities
+        self._discovered_entities: dict[str, EntityMetadata] = {}
 
         # Track subscriptions
         self._unsub_listeners: list[callable] = []
@@ -58,34 +81,111 @@ class ClarifyEntityListener:
         self.events_ignored = 0
 
         _LOGGER.debug(
-            "Initialized ClarifyEntityListener with domains: %s, excluded: %d entities",
+            "Initialized ClarifyEntityListener with domains: %s, excluded: %d entities, min_priority: %s",
             self.include_domains,
             len(self.exclude_entities),
+            min_priority.name if min_priority else "NONE",
         )
 
     async def async_start(self) -> None:
-        """Start listening to state changes."""
+        """Start listening to state changes with intelligent entity discovery."""
         _LOGGER.info("Starting entity listener for domains: %s", self.include_domains)
 
-        # Get all entities matching our criteria
-        entities_to_track = self._get_entities_to_track()
+        # Use EntitySelector if available for advanced discovery
+        if self.entity_selector:
+            await self._async_discover_entities_advanced()
+        else:
+            await self._async_discover_entities_basic()
 
-        if not entities_to_track:
+        if not self._discovered_entities:
             _LOGGER.warning("No entities found to track")
             return
 
-        _LOGGER.info("Tracking %d entities", len(entities_to_track))
+        entity_ids = list(self._discovered_entities.keys())
+        _LOGGER.info("Tracking %d entities", len(entity_ids))
+
+        # Log entity breakdown by category if using EntitySelector
+        if self.entity_selector:
+            self._log_entity_discovery_summary()
 
         # Create signals for all entities
-        await self._async_create_signals_for_entities(entities_to_track)
+        await self._async_create_signals_for_entities(entity_ids)
 
         # Subscribe to state changes
         unsub = async_track_state_change_event(
             self.hass,
-            entities_to_track,
+            entity_ids,
             self._async_state_change_listener,
         )
         self._unsub_listeners.append(unsub)
+
+    async def _async_discover_entities_advanced(self) -> None:
+        """Discover entities using EntitySelector with advanced filtering."""
+        _LOGGER.info("Using advanced entity discovery with EntitySelector")
+
+        discovered = await self.entity_selector.async_discover_entities(
+            include_domains=self.include_domains,
+            exclude_domains=None,
+            include_device_classes=self.include_device_classes,
+            exclude_device_classes=self.exclude_device_classes,
+            include_entity_ids=None,
+            exclude_entity_ids=list(self.exclude_entities),
+            min_priority=self.min_priority,
+            include_patterns=self.include_patterns,
+            exclude_patterns=self.exclude_patterns,
+        )
+
+        # Store discovered entities
+        for metadata in discovered:
+            self._discovered_entities[metadata.entity_id] = metadata
+
+        _LOGGER.info(
+            "Advanced discovery found %d entities (priority >= %s)",
+            len(self._discovered_entities),
+            self.min_priority.name,
+        )
+
+    async def _async_discover_entities_basic(self) -> None:
+        """Discover entities using basic filtering (legacy method)."""
+        _LOGGER.info("Using basic entity discovery")
+
+        entities = self._get_entities_to_track()
+
+        # Create basic metadata for discovered entities
+        for entity_id in entities:
+            state = self.hass.states.get(entity_id)
+            metadata = EntityMetadata(
+                entity_id=entity_id,
+                domain=entity_id.split(".")[0],
+                object_id=entity_id.split(".", 1)[1],
+                friendly_name=state.attributes.get("friendly_name", entity_id) if state else entity_id,
+                has_numeric_state=self._is_numeric(state.state) if state else False,
+            )
+            self._discovered_entities[entity_id] = metadata
+
+        _LOGGER.info("Basic discovery found %d entities", len(self._discovered_entities))
+
+    def _log_entity_discovery_summary(self) -> None:
+        """Log a summary of discovered entities."""
+        from collections import Counter
+
+        # Count by priority
+        priority_counts = Counter(m.priority.name for m in self._discovered_entities.values())
+
+        # Count by category
+        category_counts = Counter(m.category.value for m in self._discovered_entities.values())
+
+        _LOGGER.info("Entity discovery summary:")
+        _LOGGER.info("  By priority: %s", dict(priority_counts))
+        _LOGGER.info("  By category: %s", dict(category_counts))
+
+        # Log high priority entities
+        high_priority = [
+            e.entity_id for e in self._discovered_entities.values()
+            if e.priority == DataPriority.HIGH
+        ]
+        if high_priority:
+            _LOGGER.info("  High priority entities (%d): %s", len(high_priority), high_priority[:10])
 
     async def async_stop(self) -> None:
         """Stop listening to state changes."""
@@ -131,23 +231,35 @@ class ClarifyEntityListener:
             True if entity has numeric data to track.
         """
         # Check if state is numeric
-        try:
-            float(state.state)
+        if self._is_numeric(state.state):
             return True
-        except (ValueError, TypeError):
-            pass
 
         # Check for numeric attributes
         if state.attributes:
             for attr in NUMERIC_ATTRIBUTES:
                 if attr in state.attributes:
-                    try:
-                        float(state.attributes[attr])
+                    if self._is_numeric(state.attributes[attr]):
                         return True
-                    except (ValueError, TypeError):
-                        continue
 
         return False
+
+    def _is_numeric(self, value: Any) -> bool:
+        """Check if a value is numeric.
+
+        Args:
+            value: Value to check.
+
+        Returns:
+            True if value is numeric.
+        """
+        if value in (STATE_UNAVAILABLE, STATE_UNKNOWN, None):
+            return False
+
+        try:
+            float(value)
+            return True
+        except (ValueError, TypeError):
+            return False
 
     async def _async_create_signals_for_entities(
         self,
@@ -264,22 +376,28 @@ class ClarifyEntityListener:
         Returns:
             Dictionary of {suffix: value} pairs. Empty suffix for main state value.
         """
+        # Use EntitySelector if available for better extraction
+        if self.entity_selector and entity_id in self._discovered_entities:
+            metadata = self._discovered_entities[entity_id]
+            return self.entity_selector.extract_numeric_values(state, metadata)
+
+        # Fall back to basic extraction
         values: dict[str, float] = {}
 
         # Try to extract main state value
-        try:
-            value = float(state.state)
-            values[""] = value  # Empty suffix for main state
-        except (ValueError, TypeError):
-            pass
+        if self._is_numeric(state.state):
+            # Binary sensor special case
+            if state.domain == "binary_sensor":
+                values[""] = 1.0 if state.state == "on" else 0.0
+            else:
+                values[""] = float(state.state)
 
         # Extract numeric attributes
         if state.attributes:
             for attr in NUMERIC_ATTRIBUTES:
-                if attr in state.attributes:
+                if attr in state.attributes and self._is_numeric(state.attributes[attr]):
                     try:
-                        value = float(state.attributes[attr])
-                        values[attr] = value
+                        values[attr] = float(state.attributes[attr])
                     except (ValueError, TypeError):
                         continue
 
@@ -351,4 +469,9 @@ class ClarifyEntityListener:
     @property
     def tracked_entity_count(self) -> int:
         """Get number of tracked entities."""
-        return len(self.signal_manager.tracked_entities)
+        return len(self._discovered_entities)
+
+    @property
+    def discovered_entities(self) -> dict[str, EntityMetadata]:
+        """Get discovered entities with metadata."""
+        return self._discovered_entities
