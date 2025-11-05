@@ -281,7 +281,10 @@ class ClarifyClient:
         try:
             _LOGGER.debug("Inserting data to Clarify: %d timestamps, %d series",
                          len(data.get("times", [])), len(data.get("series", {})))
-            response = self._client.insert(data)
+            # Run insert in executor to avoid blocking event loop
+            response = await self.hass.async_add_executor_job(
+                self._client.insert, data
+            )
             _LOGGER.info("Successfully inserted data to Clarify")
             return response
 
@@ -307,7 +310,10 @@ class ClarifyClient:
         try:
             _LOGGER.debug("Inserting DataFrame to Clarify: %d timestamps, %d series",
                          len(dataframe.times), len(dataframe.series))
-            response = self._client.insert(dataframe)
+            # Run insert in executor to avoid blocking event loop
+            response = await self.hass.async_add_executor_job(
+                self._client.insert, dataframe
+            )
             _LOGGER.info("Successfully inserted DataFrame to Clarify")
             return response
 
@@ -348,7 +354,11 @@ class ClarifyClient:
             }
 
             _LOGGER.debug("Saving %d signals to Clarify", len(input_ids))
-            response = self._client.save_signals(params=params)
+            # Run save_signals in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.save_signals, params=params)
+            )
             _LOGGER.info("Successfully saved %d signals to Clarify", len(input_ids))
             return response
 
@@ -423,9 +433,14 @@ class ClarifyClient:
             }
 
             _LOGGER.debug("Publishing %d signals as items", len(signal_ids))
-            response = self._client.publish_signals(
-                items_by_signal=items_by_signal,
-                create_only=create_only,
+            # Run publish_signals in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(
+                    self._client.publish_signals,
+                    items_by_signal=items_by_signal,
+                    create_only=create_only,
+                )
             )
             _LOGGER.info("Successfully published %d signals as items", len(signal_ids))
             return response
@@ -467,7 +482,11 @@ class ClarifyClient:
             if filter_query:
                 params["filter"] = filter_query
 
-            response = self._client.select_signals(**params)
+            # Run select_signals in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.select_signals, **params)
+            )
             _LOGGER.info("Successfully selected signals")
             return response
 
@@ -508,7 +527,11 @@ class ClarifyClient:
             if filter_query:
                 params["filter"] = filter_query
 
-            response = self._client.select_items(**params)
+            # Run select_items in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.select_items, **params)
+            )
             _LOGGER.info("Successfully selected items")
             return response
 
@@ -562,7 +585,11 @@ class ClarifyClient:
             if rollup:
                 params["rollup"] = rollup
 
-            response = self._client.data_frame(**params)
+            # Run data_frame in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.data_frame, **params)
+            )
             _LOGGER.info("Successfully retrieved data frame")
             return response
 
