@@ -174,6 +174,28 @@ clarify_data_bridge:
 - `publish_by_device_class`: Publish entities by device class
 - `update_item_visibility`: Toggle item visibility in Clarify
 
+### ⚙️ Flexible Configuration & Templates
+- **8 configuration templates**: Energy, environmental, HVAC, binary sensor, motion analytics, lighting, comprehensive, real-time
+- **Per-entity customization**: Custom transmission intervals, aggregation methods, labels
+- **Aggregation support**: None, average, min, max, sum, first, last
+- **Priority override**: Per-entity priority configuration
+- **YAML validation**: Voluptuous schema for configuration validation
+
+### 🎛️ Performance Tuning
+- **4 performance profiles**: Minimal, balanced, high performance, real-time
+- **Resource monitoring**: Memory and CPU usage tracking
+- **Dynamic optimization**: Automatic suggestions based on metrics
+- **Configurable limits**: Buffer sizes, concurrent requests, memory limits
+- **Profile comparison**: Easy switching between resource/latency trade-offs
+
+### 🏥 Health Monitoring & Diagnostics
+- **Health status tracking**: Excellent, good, fair, poor, critical ratings
+- **API metrics**: Response times, success rates, error classification
+- **Buffer monitoring**: Utilization, overflows, size tracking
+- **Error analysis**: Frequency tracking and classification by type
+- **Uptime tracking**: Comprehensive uptime and reliability metrics
+- **Automated recommendations**: Context-aware optimization suggestions
+
 ### 📈 Data Retrieval
 - Fetch data back from Clarify
 - Statistics sensors (latest, average, min, max)
