@@ -347,17 +347,21 @@ class ClarifyClient:
             raise ValueError("Number of input_ids must match number of signals")
 
         try:
-            # Build params for save_signals
-            params = {
-                "inputs": {input_id: signal for input_id, signal in zip(input_ids, signals)},
-                "createOnly": create_only,
-            }
+            # Build signals_by_input mapping for the new pyclarify API
+            signals_by_input = {input_id: signal for input_id, signal in zip(input_ids, signals)}
 
             _LOGGER.debug("Saving %d signals to Clarify", len(input_ids))
             # Run save_signals in executor to avoid blocking event loop
             from functools import partial
             response = await self.hass.async_add_executor_job(
-                partial(self._client.save_signals, params=params)
+                partial(
+                    self._client.save_signals,
+                    input_ids=input_ids,
+                    signals=signals,
+                    signals_by_input=signals_by_input,
+                    create_only=create_only,
+                    integration=self.integration_id,
+                )
             )
             _LOGGER.info("Successfully saved %d signals to Clarify", len(input_ids))
             return response
