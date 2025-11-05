@@ -55,7 +55,7 @@ ATTR_LABELS = "labels"
 ATTR_DOMAIN = "domain"
 
 # Clarify API constants
-CLARIFY_API_URL = "https://api.clarify.io/v1"
+CLARIFY_API_URL = "https://api.clarify.cloud/v1"
 
 # Supported Home Assistant domains for data collection
 SUPPORTED_DOMAINS = [

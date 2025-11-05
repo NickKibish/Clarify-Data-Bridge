@@ -1,9 +1,10 @@
 """Clarify API Client wrapper for Home Assistant integration."""
 from __future__ import annotations
 
-import io
 import json
 import logging
+import os
+import tempfile
 from typing import Any
 
 from pyclarify import Client, DataFrame
@@ -44,7 +45,7 @@ class ClarifyClient:
         client_id: str,
         client_secret: str,
         integration_id: str,
-        api_url: str = "https://api.clarify.io/v1/",
+        api_url: str = "https://api.clarify.cloud/v1/",
     ) -> None:
         """Initialize the Clarify client with OAuth 2.0 credentials.
 
@@ -63,14 +64,20 @@ class ClarifyClient:
         self.integration_id = integration_id
         self.api_url = api_url
         self._client: Client | None = None
+        self._temp_credentials_file: str | None = None
 
-        _LOGGER.debug("Initializing Clarify client for integration: %s", integration_id)
+        _LOGGER.info(
+            "Initializing Clarify client: integration_id=%s, api_url=%s",
+            integration_id,
+            api_url,
+        )
+        _LOGGER.debug("Client ID: %s...", client_id[:8] if len(client_id) > 8 else "***")
 
-    def _create_credentials_file_object(self) -> io.StringIO:
-        """Create an in-memory credentials file for pyclarify.
+    def _create_credentials_file(self) -> str:
+        """Create a temporary credentials file for pyclarify.
 
         Returns:
-            StringIO object containing credentials in JSON format.
+            Path to temporary credentials file.
         """
         credentials_dict = {
             "apiUrl": self.api_url,
@@ -82,11 +89,29 @@ class ClarifyClient:
             },
         }
 
-        credentials_json = json.dumps(credentials_dict)
-        file_obj = io.StringIO(credentials_json)
-        file_obj.seek(0)  # Reset to beginning for reading
+        _LOGGER.debug(
+            "Creating credentials file with apiUrl=%s, integration=%s",
+            self.api_url,
+            self.integration_id,
+        )
 
-        return file_obj
+        # Create a temporary file that will be cleaned up later
+        fd, temp_path = tempfile.mkstemp(suffix=".json", prefix="clarify_creds_")
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(credentials_dict, f, indent=2)
+
+            _LOGGER.debug("Created temporary credentials file: %s", temp_path)
+            return temp_path
+
+        except Exception as err:
+            # Clean up on error
+            try:
+                os.close(fd)
+                os.unlink(temp_path)
+            except:
+                pass
+            raise ClarifyConnectionError(f"Failed to create credentials file: {err}") from err
 
     async def async_connect(self) -> bool:
         """Establish connection to Clarify API and verify credentials.
@@ -98,32 +123,81 @@ class ClarifyClient:
             ClarifyAuthenticationError: If credentials are invalid.
             ClarifyConnectionError: If unable to connect to Clarify API.
         """
+        _LOGGER.info("Connecting to Clarify API at %s", self.api_url)
+
         try:
-            # Create credentials file object
-            credentials_file = self._create_credentials_file_object()
+            # Create credentials file
+            self._temp_credentials_file = self._create_credentials_file()
+            _LOGGER.debug("Credentials file created successfully")
 
-            # Initialize pyclarify Client with file object
-            _LOGGER.debug("Creating pyclarify Client instance")
-            self._client = Client(credentials=credentials_file)
+            # Initialize pyclarify Client with file path
+            _LOGGER.debug("Initializing pyclarify Client")
+            self._client = Client(credentials=self._temp_credentials_file)
+            _LOGGER.info("pyclarify Client initialized")
 
-            # Verify connection by attempting to get integration info
-            # Note: This will trigger the OAuth 2.0 flow and obtain an access token
-            _LOGGER.info("Successfully connected to Clarify API")
-            return True
+            # Make an actual API call to verify connection and credentials
+            # This will trigger the OAuth 2.0 flow and validate credentials
+            _LOGGER.info("Verifying connection by calling select_signals API")
+            try:
+                response = self._client.select_signals(skip=0, limit=1)
+                _LOGGER.debug("API call successful, response type: %s", type(response))
 
+                if not isinstance(response, dict):
+                    raise ClarifyConnectionError(
+                        f"Invalid response from Clarify API. Expected dict, got {type(response)}. "
+                        f"This may indicate an API URL issue. Current URL: {self.api_url}"
+                    )
+
+                _LOGGER.info("Successfully connected and authenticated to Clarify API")
+                return True
+
+            except Exception as api_err:
+                error_msg = str(api_err).lower()
+                _LOGGER.error("API call failed: %s", api_err, exc_info=True)
+
+                # Provide specific error messages
+                if "401" in error_msg or "unauthorized" in error_msg:
+                    raise ClarifyAuthenticationError(
+                        f"Authentication failed with Clarify API. "
+                        f"Please verify your client_id and client_secret are correct. "
+                        f"Error: {api_err}"
+                    ) from api_err
+                elif "404" in error_msg or "not found" in error_msg:
+                    raise ClarifyConnectionError(
+                        f"API endpoint not found. This likely means the API URL is incorrect. "
+                        f"Current URL: {self.api_url}. "
+                        f"Should be: https://api.clarify.cloud/v1/. "
+                        f"Error: {api_err}"
+                    ) from api_err
+                elif "403" in error_msg or "forbidden" in error_msg:
+                    raise ClarifyAuthenticationError(
+                        f"Access forbidden. Your credentials may not have permission for this operation. "
+                        f"Error: {api_err}"
+                    ) from api_err
+                elif "timeout" in error_msg or "timed out" in error_msg:
+                    raise ClarifyConnectionError(
+                        f"Connection timeout. Please check your network connection. "
+                        f"Error: {api_err}"
+                    ) from api_err
+                elif "connection" in error_msg or "network" in error_msg:
+                    raise ClarifyConnectionError(
+                        f"Network connection failed. Please check your internet connection. "
+                        f"Error: {api_err}"
+                    ) from api_err
+                else:
+                    raise ClarifyConnectionError(
+                        f"Failed to connect to Clarify API at {self.api_url}. "
+                        f"Error: {api_err}"
+                    ) from api_err
+
+        except (ClarifyAuthenticationError, ClarifyConnectionError):
+            # Re-raise our custom exceptions
+            raise
         except Exception as err:
-            error_msg = str(err).lower()
-
-            # Categorize errors
-            if "auth" in error_msg or "credential" in error_msg or "unauthorized" in error_msg:
-                _LOGGER.error("Authentication failed: %s", err)
-                raise ClarifyAuthenticationError(f"Invalid credentials: {err}") from err
-            elif "connect" in error_msg or "network" in error_msg or "timeout" in error_msg:
-                _LOGGER.error("Connection failed: %s", err)
-                raise ClarifyConnectionError(f"Cannot connect to Clarify: {err}") from err
-            else:
-                _LOGGER.error("Unexpected error during connection: %s", err)
-                raise ClarifyConnectionError(f"Failed to connect: {err}") from err
+            _LOGGER.error("Unexpected error during connection: %s", err, exc_info=True)
+            raise ClarifyConnectionError(
+                f"Unexpected error connecting to Clarify: {err}"
+            ) from err
 
     async def async_verify_connection(self) -> bool:
         """Verify that the connection is still valid.
@@ -491,3 +565,13 @@ class ClarifyClient:
             # pyclarify Client doesn't have an explicit close method
             # but we can release the reference
             self._client = None
+
+        # Clean up temporary credentials file
+        if self._temp_credentials_file is not None:
+            try:
+                if os.path.exists(self._temp_credentials_file):
+                    os.unlink(self._temp_credentials_file)
+                    _LOGGER.debug("Cleaned up temporary credentials file: %s", self._temp_credentials_file)
+                self._temp_credentials_file = None
+            except Exception as err:
+                _LOGGER.warning("Failed to clean up temporary credentials file: %s", err)
