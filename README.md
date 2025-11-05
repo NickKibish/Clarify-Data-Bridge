@@ -141,12 +141,21 @@ clarify_data_bridge:
 - **Multi-attribute tracking**: Separate signals for entity attributes (temp, humidity, etc.)
 - **Binary sensor conversion**: On/off → 1/0 for time-series compatibility
 
-### ⚡ Efficient Data Handling
-- **Batch processing**: Configurable batch intervals (60-3600s)
-- **Automatic retry**: Failed data batches are retried
-- **Overflow protection**: Automatic send when buffer is full
-- **OAuth 2.0 authentication**: Secure credentials management
-- **Connection monitoring**: Automatic reconnection on failures
+### ⚡ Intelligent Data Collection & Validation
+- **Event-driven monitoring**: Zero-poll state change capture
+- **Data validation**: Robust validation with range checks and staleness detection
+- **Boolean conversion**: Automatic on/off → 1/0 for binary sensors
+- **Unit conversion**: Automatic temperature, power, energy, pressure conversions
+- **Type safety**: NaN/Inf filtering and numeric range validation
+- **Edge case handling**: Unavailable/unknown state filtering
+
+### 🎯 Smart Buffering System
+- **5 buffering strategies**: Time, size, priority, hybrid (recommended), adaptive
+- **Priority-based flushing**: Immediate flush for critical sensors (energy, temp, CO2)
+- **Adaptive rate adjustment**: Automatically adjusts to data volume
+- **Configurable intervals**: 60s to 600s batch intervals
+- **Size-based triggers**: Flush when buffer reaches limit (default: 100 points)
+- **Comprehensive metrics**: Track flush triggers, buffer sizes, data rates
 
 ### 🚀 Intelligent Auto-Publishing
 - **8 publishing strategies**: Manual, all, priority-based, category, device class, domain, and custom
@@ -180,6 +189,7 @@ clarify_data_bridge:
 
 - **[Configuration UI Guide](./CONFIG_UI.md)**: Complete guide to the configuration interface with screenshots and examples
 - **[Entity Selection Guide](./ENTITY_SELECTION.md)**: Comprehensive guide to entity filtering, classification, and configuration
+- **[Data Collection & Buffering](./DATA_COLLECTION.md)**: Guide to data validation, conversion, and intelligent buffering strategies
 - **[Publishing Strategies](./PUBLISHING.md)**: Guide to automatic publishing of signals as Clarify.io items
 - **Configuration Examples**: See CONFIG_UI.md for UI examples and ENTITY_SELECTION.md for YAML examples
 - **API Reference**: Entity metadata structure and priority levels
