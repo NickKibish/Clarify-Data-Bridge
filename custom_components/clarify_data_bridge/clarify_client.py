@@ -7,7 +7,9 @@ import logging
 from typing import Any
 
 from pyclarify import Client, DataFrame
+from pyclarify.views.items import Item
 from pyclarify.views.signals import SignalInfo
+from pyclarify.query import Filter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -272,6 +274,187 @@ class ClarifyClient:
             signals=[signal],
             create_only=False,
         )
+
+    async def async_publish_signals(
+        self,
+        signal_ids: list[str],
+        items: list[Item],
+        create_only: bool = False,
+    ) -> dict[str, Any]:
+        """Publish signals as items in Clarify.
+
+        Items are the published version of signals that are visible to the organization.
+
+        Args:
+            signal_ids: List of signal IDs to publish.
+            items: List of Item objects with metadata and visibility settings.
+            create_only: If True, only create new items, don't update existing ones.
+
+        Returns:
+            Response from Clarify API mapping signal IDs to item IDs.
+
+        Raises:
+            ClarifyConnectionError: If not connected or publish fails.
+        """
+        if self._client is None:
+            raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
+
+        if len(signal_ids) != len(items):
+            raise ValueError("Number of signal_ids must match number of items")
+
+        try:
+            # Build items_by_signal dict for publish_signals
+            items_by_signal = {
+                signal_id: item for signal_id, item in zip(signal_ids, items)
+            }
+
+            _LOGGER.debug("Publishing %d signals as items", len(signal_ids))
+            response = self._client.publish_signals(
+                items_by_signal=items_by_signal,
+                create_only=create_only,
+            )
+            _LOGGER.info("Successfully published %d signals as items", len(signal_ids))
+            return response
+
+        except Exception as err:
+            _LOGGER.error("Failed to publish signals: %s", err)
+            raise ClarifyConnectionError(f"Signal publish failed: {err}") from err
+
+    async def async_select_signals(
+        self,
+        skip: int = 0,
+        limit: int = 50,
+        sort: list[str] | None = None,
+        filter_query: Filter | None = None,
+    ) -> dict[str, Any]:
+        """Select signals metadata from Clarify.
+
+        Args:
+            skip: Number of signals to skip (for pagination).
+            limit: Maximum number of signals to return.
+            sort: List of sort fields (prefix with - for descending).
+            filter_query: Filter to apply to selection.
+
+        Returns:
+            Response containing signal metadata.
+
+        Raises:
+            ClarifyConnectionError: If not connected or selection fails.
+        """
+        if self._client is None:
+            raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
+
+        try:
+            _LOGGER.debug("Selecting signals with skip=%d, limit=%d", skip, limit)
+
+            params = {"skip": skip, "limit": limit}
+            if sort:
+                params["sort"] = sort
+            if filter_query:
+                params["filter"] = filter_query
+
+            response = self._client.select_signals(**params)
+            _LOGGER.info("Successfully selected signals")
+            return response
+
+        except Exception as err:
+            _LOGGER.error("Failed to select signals: %s", err)
+            raise ClarifyConnectionError(f"Signal selection failed: {err}") from err
+
+    async def async_select_items(
+        self,
+        skip: int = 0,
+        limit: int = 50,
+        sort: list[str] | None = None,
+        filter_query: Filter | None = None,
+    ) -> dict[str, Any]:
+        """Select items metadata from Clarify.
+
+        Args:
+            skip: Number of items to skip (for pagination).
+            limit: Maximum number of items to return.
+            sort: List of sort fields (prefix with - for descending).
+            filter_query: Filter to apply to selection.
+
+        Returns:
+            Response containing item metadata.
+
+        Raises:
+            ClarifyConnectionError: If not connected or selection fails.
+        """
+        if self._client is None:
+            raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
+
+        try:
+            _LOGGER.debug("Selecting items with skip=%d, limit=%d", skip, limit)
+
+            params = {"skip": skip, "limit": limit}
+            if sort:
+                params["sort"] = sort
+            if filter_query:
+                params["filter"] = filter_query
+
+            response = self._client.select_items(**params)
+            _LOGGER.info("Successfully selected items")
+            return response
+
+        except Exception as err:
+            _LOGGER.error("Failed to select items: %s", err)
+            raise ClarifyConnectionError(f"Item selection failed: {err}") from err
+
+    async def async_data_frame(
+        self,
+        filter_query: Filter | None = None,
+        include: list[str] | None = None,
+        not_before: str | None = None,
+        before: str | None = None,
+        rollup: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve time series data from Clarify items.
+
+        Args:
+            filter_query: Filter to select which items to retrieve data for.
+            include: List of relationships to include (e.g., ["item"]).
+            not_before: ISO 8601 timestamp for start of time range.
+            before: ISO 8601 timestamp for end of time range.
+            rollup: Rollup period (e.g., "PT1H" for 1 hour).
+
+        Returns:
+            Response containing time series data and metadata.
+
+        Raises:
+            ClarifyConnectionError: If not connected or data retrieval fails.
+        """
+        if self._client is None:
+            raise ClarifyConnectionError("Client not initialized. Call async_connect first.")
+
+        try:
+            _LOGGER.debug(
+                "Retrieving data frame: not_before=%s, before=%s, rollup=%s",
+                not_before,
+                before,
+                rollup,
+            )
+
+            params = {}
+            if filter_query:
+                params["filter"] = filter_query
+            if include:
+                params["include"] = include
+            if not_before:
+                params["notBefore"] = not_before
+            if before:
+                params["before"] = before
+            if rollup:
+                params["rollup"] = rollup
+
+            response = self._client.data_frame(**params)
+            _LOGGER.info("Successfully retrieved data frame")
+            return response
+
+        except Exception as err:
+            _LOGGER.error("Failed to retrieve data frame: %s", err)
+            raise ClarifyConnectionError(f"Data frame retrieval failed: {err}") from err
 
     @property
     def is_connected(self) -> bool:

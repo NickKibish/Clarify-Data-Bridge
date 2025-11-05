@@ -35,6 +35,21 @@ ENTRY_DATA_CLIENT = "client"
 ENTRY_DATA_COORDINATOR = "coordinator"
 ENTRY_DATA_LISTENER = "listener"
 ENTRY_DATA_SIGNAL_MANAGER = "signal_manager"
+ENTRY_DATA_ITEM_MANAGER = "item_manager"
+
+# Service names
+SERVICE_PUBLISH_ENTITY = "publish_entity"
+SERVICE_PUBLISH_ENTITIES = "publish_entities"
+SERVICE_PUBLISH_ALL_TRACKED = "publish_all_tracked"
+SERVICE_UPDATE_ITEM_VISIBILITY = "update_item_visibility"
+SERVICE_PUBLISH_DOMAIN = "publish_domain"
+
+# Service fields
+ATTR_ENTITY_ID = "entity_id"
+ATTR_ENTITY_IDS = "entity_ids"
+ATTR_VISIBLE = "visible"
+ATTR_LABELS = "labels"
+ATTR_DOMAIN = "domain"
 
 # Clarify API constants
 CLARIFY_API_URL = "https://api.clarify.io/v1"

@@ -16,6 +16,7 @@ from .clarify_client import (
 from .coordinator import ClarifyDataCoordinator
 from .entity_listener import ClarifyEntityListener
 from .signal_manager import ClarifySignalManager
+from .item_manager import ClarifyItemManager
 from .const import (
     DOMAIN,
     CONF_CLIENT_ID,
@@ -32,11 +33,22 @@ from .const import (
     ENTRY_DATA_COORDINATOR,
     ENTRY_DATA_LISTENER,
     ENTRY_DATA_SIGNAL_MANAGER,
+    ENTRY_DATA_ITEM_MANAGER,
+    SERVICE_PUBLISH_ENTITY,
+    SERVICE_PUBLISH_ENTITIES,
+    SERVICE_PUBLISH_ALL_TRACKED,
+    SERVICE_UPDATE_ITEM_VISIBILITY,
+    SERVICE_PUBLISH_DOMAIN,
+    ATTR_ENTITY_ID,
+    ATTR_ENTITY_IDS,
+    ATTR_VISIBLE,
+    ATTR_LABELS,
+    ATTR_DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[str] = []
+PLATFORMS: list[str] = ["sensor"]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -107,13 +119,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         exclude_entities=exclude_entities,
     )
 
+    # Initialize item manager
+    item_manager = ClarifyItemManager(
+        hass=hass,
+        client=client,
+        signal_manager=signal_manager,
+        auto_publish=False,  # Manual publishing by default
+        default_visible=True,
+    )
+
     # Store components
     hass.data[DOMAIN][entry.entry_id] = {
         ENTRY_DATA_CLIENT: client,
         ENTRY_DATA_COORDINATOR: coordinator,
         ENTRY_DATA_SIGNAL_MANAGER: signal_manager,
         ENTRY_DATA_LISTENER: listener,
+        ENTRY_DATA_ITEM_MANAGER: item_manager,
     }
+
+    # Register services (only once)
+    if not hass.services.has_service(DOMAIN, SERVICE_PUBLISH_ENTITY):
+        await _async_register_services(hass)
 
     # Start coordinator and listener
     await coordinator.start()
@@ -176,3 +202,186 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
+
+
+async def _async_register_services(hass: HomeAssistant) -> None:
+    """Register integration services."""
+    import voluptuous as vol
+    from homeassistant import config_validation as cv
+
+    async def handle_publish_entity(call):
+        """Handle publish_entity service call."""
+        entity_id = call.data[ATTR_ENTITY_ID]
+        visible = call.data.get(ATTR_VISIBLE, True)
+        labels = call.data.get(ATTR_LABELS)
+
+        # Find the item manager from any active integration instance
+        item_manager = _get_item_manager(hass)
+        if not item_manager:
+            _LOGGER.error("No active Clarify integration found")
+            return
+
+        try:
+            item_id = await item_manager.async_publish_entity(
+                entity_id=entity_id,
+                visible=visible,
+                labels=labels,
+            )
+            _LOGGER.info("Published entity %s as item %s", entity_id, item_id)
+        except Exception as err:
+            _LOGGER.error("Failed to publish entity %s: %s", entity_id, err)
+
+    async def handle_publish_entities(call):
+        """Handle publish_entities service call."""
+        entity_ids = call.data[ATTR_ENTITY_IDS]
+        visible = call.data.get(ATTR_VISIBLE, True)
+        labels = call.data.get(ATTR_LABELS)
+
+        item_manager = _get_item_manager(hass)
+        if not item_manager:
+            _LOGGER.error("No active Clarify integration found")
+            return
+
+        try:
+            result = await item_manager.async_publish_multiple_entities(
+                entity_ids=entity_ids,
+                visible=visible,
+                labels=labels,
+            )
+            _LOGGER.info("Published %d entities as items", len(result))
+        except Exception as err:
+            _LOGGER.error("Failed to publish entities: %s", err)
+
+    async def handle_publish_all_tracked(call):
+        """Handle publish_all_tracked service call."""
+        visible = call.data.get(ATTR_VISIBLE, True)
+        labels = call.data.get(ATTR_LABELS)
+
+        item_manager = _get_item_manager(hass)
+        if not item_manager:
+            _LOGGER.error("No active Clarify integration found")
+            return
+
+        try:
+            result = await item_manager.async_publish_all_tracked(
+                visible=visible,
+                labels=labels,
+            )
+            _LOGGER.info("Published %d tracked entities as items", len(result))
+        except Exception as err:
+            _LOGGER.error("Failed to publish tracked entities: %s", err)
+
+    async def handle_update_item_visibility(call):
+        """Handle update_item_visibility service call."""
+        entity_id = call.data[ATTR_ENTITY_ID]
+        visible = call.data[ATTR_VISIBLE]
+
+        item_manager = _get_item_manager(hass)
+        if not item_manager:
+            _LOGGER.error("No active Clarify integration found")
+            return
+
+        try:
+            await item_manager.async_update_item_visibility(
+                entity_id=entity_id,
+                visible=visible,
+            )
+            _LOGGER.info("Updated visibility for %s to %s", entity_id, visible)
+        except Exception as err:
+            _LOGGER.error("Failed to update visibility for %s: %s", entity_id, err)
+
+    async def handle_publish_domain(call):
+        """Handle publish_domain service call."""
+        domain = call.data[ATTR_DOMAIN]
+        visible = call.data.get(ATTR_VISIBLE, True)
+        labels = call.data.get(ATTR_LABELS)
+
+        item_manager = _get_item_manager(hass)
+        if not item_manager:
+            _LOGGER.error("No active Clarify integration found")
+            return
+
+        # Get all entities in the domain
+        entity_ids = [
+            state.entity_id
+            for state in hass.states.async_all()
+            if state.entity_id.startswith(f"{domain}.")
+        ]
+
+        try:
+            result = await item_manager.async_publish_multiple_entities(
+                entity_ids=entity_ids,
+                visible=visible,
+                labels=labels,
+            )
+            _LOGGER.info("Published %d entities from domain %s", len(result), domain)
+        except Exception as err:
+            _LOGGER.error("Failed to publish domain %s: %s", domain, err)
+
+    # Register services
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PUBLISH_ENTITY,
+        handle_publish_entity,
+        schema=vol.Schema({
+            vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+            vol.Optional(ATTR_VISIBLE, default=True): cv.boolean,
+            vol.Optional(ATTR_LABELS): dict,
+        }),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PUBLISH_ENTITIES,
+        handle_publish_entities,
+        schema=vol.Schema({
+            vol.Required(ATTR_ENTITY_IDS): cv.entity_ids,
+            vol.Optional(ATTR_VISIBLE, default=True): cv.boolean,
+            vol.Optional(ATTR_LABELS): dict,
+        }),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PUBLISH_ALL_TRACKED,
+        handle_publish_all_tracked,
+        schema=vol.Schema({
+            vol.Optional(ATTR_VISIBLE, default=True): cv.boolean,
+            vol.Optional(ATTR_LABELS): dict,
+        }),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_ITEM_VISIBILITY,
+        handle_update_item_visibility,
+        schema=vol.Schema({
+            vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+            vol.Required(ATTR_VISIBLE): cv.boolean,
+        }),
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PUBLISH_DOMAIN,
+        handle_publish_domain,
+        schema=vol.Schema({
+            vol.Required(ATTR_DOMAIN): cv.string,
+            vol.Optional(ATTR_VISIBLE, default=True): cv.boolean,
+            vol.Optional(ATTR_LABELS): dict,
+        }),
+    )
+
+    _LOGGER.info("Registered Clarify Data Bridge services")
+
+
+def _get_item_manager(hass: HomeAssistant) -> ClarifyItemManager | None:
+    """Get the item manager from the first active integration instance."""
+    if DOMAIN not in hass.data:
+        return None
+
+    for entry_data in hass.data[DOMAIN].values():
+        if ENTRY_DATA_ITEM_MANAGER in entry_data:
+            return entry_data[ENTRY_DATA_ITEM_MANAGER]
+
+    return None
