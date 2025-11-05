@@ -30,21 +30,53 @@ Unlike basic Home Assistant dashboards, Clarify.io provides industrial-grade tim
 1. Copy the `custom_components/clarify_data_bridge` directory to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
 
-## Quick Start Configuration
+## Configuration
 
-### Basic Setup
+### Intuitive UI Setup
 
-1. Go to Settings -> Devices & Services
-2. Click "+ Add Integration"
-3. Search for "Clarify Data Bridge"
-4. Enter your Clarify OAuth 2.0 credentials:
-   - **Client ID**: Your OAuth client ID from Clarify
-   - **Client Secret**: Your OAuth client secret
-   - **Integration ID**: Your Clarify integration ID
+The integration features a **user-friendly multi-step configuration flow** - no YAML required!
 
-### Advanced Configuration (Optional)
+1. Go to **Settings** → **Devices & Services**
+2. Click **"+ Add Integration"**
+3. Search for **"Clarify Data Bridge"**
+4. Follow the guided setup:
 
-Configure entity selection and filtering through the integration options or `configuration.yaml`:
+#### Step 1: Credentials
+Enter your Clarify OAuth 2.0 credentials
+
+#### Step 2: Choose Selection Method
+Pick how you want to select entities:
+- 🚀 **Quick Setup** (Recommended) - Select by priority level
+- 📊 **By Priority** - High/Medium/Low with domain filtering
+- 📁 **By Domain** - Sensors, climate, binary sensors, etc.
+- 🏷️ **By Device Class** - Temperature, power, energy, etc.
+- ✅ **Manual Selection** - Pick specific entities
+- ⚙️ **Advanced Filters** - Regex patterns and rules
+
+#### Step 3: Entity Selection
+Configure your chosen method with real-time entity counts
+
+#### Step 4: Preview & Confirm
+Review your selection summary:
+- Total entities
+- Priority breakdown
+- Domain distribution
+- Sample entities
+
+**Result**: Automatic entity discovery with rich metadata!
+
+### After Setup
+
+Access **integration options** anytime:
+- **Batch Settings** - Adjust transmission intervals
+- **Entity Filters** - Change priority/domains/device classes
+- **Advanced Filters** - Add regex patterns and exclusions
+
+**See [CONFIG_UI.md](./CONFIG_UI.md) for detailed UI guide with examples.**
+
+### YAML Configuration (Optional)
+
+Advanced users can still use YAML:
 
 ```yaml
 # Example: Energy monitoring focus
@@ -54,7 +86,7 @@ clarify_data_bridge:
   integration_id: "your-integration-id"
 
   # Filter by priority (HIGH, MEDIUM, LOW)
-  min_priority: "HIGH"  # Only energy, temperature, CO2, etc.
+  min_priority: "HIGH"
 
   # Filter by device class
   include_device_classes:
@@ -69,7 +101,7 @@ clarify_data_bridge:
     - sensor.time_date
 ```
 
-**See [ENTITY_SELECTION.md](./ENTITY_SELECTION.md) for comprehensive filtering options and examples.**
+**See [ENTITY_SELECTION.md](./ENTITY_SELECTION.md) for all filtering options.**
 
 ## Getting Clarify Credentials
 
@@ -79,6 +111,14 @@ clarify_data_bridge:
 4. Copy the credentials and Integration ID
 
 ## Key Features
+
+### 🖥️ Intuitive Configuration UI
+- **Multi-step guided setup** - No technical knowledge required
+- **6 selection methods** - From quick setup to advanced patterns
+- **Real-time preview** - See exactly what will be tracked
+- **Entity counts** - Know how many entities match your filters
+- **Smart defaults** - Pre-selected high-value device classes
+- **Options menu** - Adjust settings without recreating integration
 
 ### 🎯 Intelligent Entity Discovery
 - **Automatic detection** of all Home Assistant entities with numeric data
@@ -127,8 +167,9 @@ clarify_data_bridge:
 
 ## Documentation
 
+- **[Configuration UI Guide](./CONFIG_UI.md)**: Complete guide to the configuration interface with screenshots and examples
 - **[Entity Selection Guide](./ENTITY_SELECTION.md)**: Comprehensive guide to entity filtering, classification, and configuration
-- **Configuration Examples**: See ENTITY_SELECTION.md for detailed use cases
+- **Configuration Examples**: See CONFIG_UI.md for UI examples and ENTITY_SELECTION.md for YAML examples
 - **API Reference**: Entity metadata structure and priority levels
 
 ## Use Cases
@@ -155,6 +196,40 @@ exclude_patterns: ["sensor\\.sun_.*", "sensor\\.moon_.*"]
 ```
 
 ## Examples
+
+### Configuration UI Flow
+
+**Quick Setup Example**:
+```
+Step 1: Enter credentials → Validates immediately
+Step 2: Choose "Quick Setup" → Select "High Priority"
+Step 3: Preview shows:
+  • 32 total entities
+  • 32 high priority (energy, temp, CO2)
+  • Domains: sensor(28), climate(4)
+  • Sample: Living Room Temperature, Power Consumption, etc.
+Step 4: Confirm → Done! ✅
+```
+
+**Device Class Example**:
+```
+Step 1: Enter credentials
+Step 2: Choose "By Device Class"
+Step 3: Select: temperature, humidity, power, energy
+  → Shows: Temperature (12), Humidity (8), Power (5), Energy (5)
+Step 4: Preview shows 30 entities
+Step 5: Confirm → Done! ✅
+```
+
+**Advanced Pattern Example**:
+```
+Step 1: Enter credentials
+Step 2: Choose "Advanced Filtering"
+Step 3: Include pattern: sensor\.(kitchen|bedroom)_.*
+         Exclude pattern: sensor\..*_forecast.*
+Step 4: Preview shows 18 entities from those rooms
+Step 5: Confirm → Done! ✅
+```
 
 ### Discovered Entities Summary
 When the integration starts, it logs discovered entities:

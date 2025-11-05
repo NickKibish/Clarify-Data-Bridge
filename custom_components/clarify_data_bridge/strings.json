@@ -14,6 +14,92 @@
           "client_secret": "OAuth 2.0 Client Secret from your Clarify credentials file",
           "integration_id": "Your Clarify integration identifier"
         }
+      },
+      "selection_method": {
+        "title": "How do you want to select entities?",
+        "description": "Choose how you want to select which Home Assistant entities to send to Clarify.io.\n\n{entities_available} entities are available in your system.",
+        "data": {
+          "selection_method": "Selection Method"
+        }
+      },
+      "quick_setup": {
+        "title": "Quick Setup (Recommended)",
+        "description": "Select entities by priority level. This is the quickest way to get started.\n\n**High Priority**: Energy, temperature, CO2, power consumption, air quality\n**Medium Priority**: High + light levels, motion sensors, sound levels\n**Low Priority**: All entities including binary sensors",
+        "data": {
+          "priority_level": "Priority Level"
+        }
+      },
+      "priority_selection": {
+        "title": "Select by Priority Level",
+        "description": "Entities are automatically classified by data value:\n\n• **High Priority**: Critical metrics (energy, temperature, CO2, etc.)\n• **Medium Priority**: Useful data (light, speed, signal strength)\n• **Low Priority**: All trackable entities including binary sensors",
+        "data": {
+          "min_priority": "Minimum Priority",
+          "include_domains": "Include Domains"
+        },
+        "data_description": {
+          "min_priority": "Only track entities at or above this priority level",
+          "include_domains": "Select which domains to include"
+        }
+      },
+      "domain_selection": {
+        "title": "Select by Domain",
+        "description": "Choose which Home Assistant domains to track. Each domain represents a type of entity.\n\nCommon domains:\n• **sensor**: Temperature, humidity, power, etc.\n• **climate**: Thermostats and HVAC systems\n• **binary_sensor**: Motion, door, window sensors (converted to 0/1)",
+        "data": {
+          "domains": "Domains to Track",
+          "refine_priority": "Refine by priority level after?"
+        },
+        "data_description": {
+          "domains": "Select one or more domains to track",
+          "refine_priority": "After selecting domains, choose priority level"
+        }
+      },
+      "device_class_selection": {
+        "title": "Select by Device Class",
+        "description": "Choose specific types of sensors by device class. This is the most precise way to select entities.\n\n{device_class_count} device classes found in your system.\n\n**Recommended**: temperature, humidity, power, energy, voltage, current, carbon_dioxide",
+        "data": {
+          "device_classes": "Device Classes to Track"
+        },
+        "data_description": {
+          "device_classes": "Select specific sensor types to track"
+        }
+      },
+      "entity_selection": {
+        "title": "Manual Entity Selection",
+        "description": "Manually select specific entities to track. This gives you complete control.\n\n{entity_count} trackable entities found (showing first {showing}).\n\n**Tip**: Use bulk selection methods (domain, device class, priority) for easier setup with many entities.",
+        "data": {
+          "entities": "Entities to Track",
+          "add_filters": "Add advanced filters?"
+        },
+        "data_description": {
+          "entities": "Select specific entities you want to track",
+          "add_filters": "Add pattern-based filters after selection"
+        }
+      },
+      "advanced_filtering": {
+        "title": "Advanced Filtering",
+        "description": "Use regular expressions and patterns to precisely control entity selection.\n\n**Include patterns**: Match entities to track (e.g., `sensor\\..*_temperature`)\n**Exclude patterns**: Match entities to exclude (e.g., `sensor\\.test_.*`)\n**Exclude entities**: Comma-separated list of entity IDs to exclude\n\n**Examples**:\n• All temperature sensors: `sensor\\..*_temperature`\n• Kitchen and bedroom sensors: `sensor\\.(kitchen|bedroom)_.*`\n• All power/energy: `sensor\\..*_(power|energy)`",
+        "data": {
+          "include_pattern": "Include Pattern (regex)",
+          "exclude_pattern": "Exclude Pattern (regex)",
+          "exclude_entities": "Exclude Entities (comma-separated)",
+          "min_priority": "Minimum Priority"
+        },
+        "data_description": {
+          "include_pattern": "Regular expression to match entity IDs to include",
+          "exclude_pattern": "Regular expression to match entity IDs to exclude",
+          "exclude_entities": "Specific entity IDs to exclude, comma-separated",
+          "min_priority": "Minimum priority level for entities"
+        }
+      },
+      "preview": {
+        "title": "Preview & Confirm",
+        "description": "**📊 Selection Summary**\n\n**Total Entities**: {total_count}\n• High Priority: {high_count}\n• Medium Priority: {medium_count}\n• Low Priority: {low_count}\n\n**Domains**: {domains}\n\n**Categories**: {categories}\n\n**Sample Entities**:\n{samples}\n\nThese entities will be automatically discovered and streamed to Clarify.io with rich metadata including device information, location (area), and comprehensive labels.",
+        "data": {
+          "confirm": "Confirm and Create Integration"
+        },
+        "data_description": {
+          "confirm": "Click to confirm and complete setup"
+        }
       }
     },
     "error": {
@@ -29,7 +115,16 @@
     "step": {
       "init": {
         "title": "Configure Clarify Data Bridge",
-        "description": "Adjust batch processing settings for data transmission to Clarify.",
+        "description": "Choose what you want to configure",
+        "menu_options": {
+          "batch_settings": "Batch Processing Settings",
+          "entity_filters": "Entity Filtering",
+          "advanced_filters": "Advanced Filters"
+        }
+      },
+      "batch_settings": {
+        "title": "Batch Processing Settings",
+        "description": "Configure how data is batched and sent to Clarify.io.\n\n**Batch Interval**: How often to send accumulated data\n**Batch Size**: Maximum data points before automatic send\n\n**Recommendations**:\n• Small homes: 300s interval, 100 batch size\n• Medium homes: 180s interval, 200 batch size\n• Large homes: 120s interval, 500 batch size",
         "data": {
           "batch_interval": "Batch Interval (seconds)",
           "max_batch_size": "Maximum Batch Size"
@@ -38,6 +133,46 @@
           "batch_interval": "How often to send batched data to Clarify (60-3600 seconds)",
           "max_batch_size": "Maximum number of data points to accumulate before sending (10-1000)"
         }
+      },
+      "entity_filters": {
+        "title": "Entity Filtering",
+        "description": "Adjust which entities are tracked based on priority, domain, and device class.\n\n**Priority Levels**:\n• High: Energy, temperature, CO2, air quality\n• Medium: High + light, motion, sound\n• Low: All entities including binary sensors\n\nChanges take effect after restarting the integration.",
+        "data": {
+          "min_priority": "Minimum Priority",
+          "include_domains": "Include Domains",
+          "include_device_classes": "Include Device Classes"
+        },
+        "data_description": {
+          "min_priority": "Only track entities at or above this priority level",
+          "include_domains": "Domains to track (sensor, climate, etc.)",
+          "include_device_classes": "Specific device classes to track (optional)"
+        }
+      },
+      "advanced_filters": {
+        "title": "Advanced Filtering",
+        "description": "Use patterns and exclusions for precise entity control.\n\n**Include Patterns**: Regex patterns for entities to include (comma-separated)\n**Exclude Patterns**: Regex patterns for entities to exclude (comma-separated)\n**Exclude Entities**: Specific entity IDs to exclude (comma-separated)\n\n**Pattern Examples**:\n• `sensor\\..*_temperature` - All temperature sensors\n• `sensor\\.(kitchen|bedroom)_.*` - Sensors in specific rooms\n• `sensor\\..*_(power|energy)` - All power and energy sensors\n\nChanges take effect after restarting the integration.",
+        "data": {
+          "include_patterns": "Include Patterns (comma-separated)",
+          "exclude_patterns": "Exclude Patterns (comma-separated)",
+          "exclude_entities": "Exclude Entities (comma-separated)"
+        },
+        "data_description": {
+          "include_patterns": "Regular expression patterns to match entity IDs to include",
+          "exclude_patterns": "Regular expression patterns to match entity IDs to exclude",
+          "exclude_entities": "Specific entity IDs to exclude"
+        }
+      }
+    }
+  },
+  "selector": {
+    "selection_method": {
+      "options": {
+        "quick": "Quick Setup (Recommended)",
+        "priority": "Select by Priority Level",
+        "domain": "Select by Domain",
+        "device_class": "Select by Device Class",
+        "manual": "Manual Entity Selection",
+        "advanced": "Advanced Filtering"
       }
     }
   }
