@@ -141,6 +141,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         min_priority = DataPriority.LOW
         _LOGGER.warning("Invalid min_priority '%s', using LOW", min_priority_str)
 
+    _LOGGER.info("=== PRIORITY DEBUG: min_priority_str='%s', min_priority=%s (value=%d) ===",
+                 min_priority_str, min_priority.name, min_priority.value)
     _LOGGER.debug("Setting up Clarify Data Bridge integration for: %s", integration_id)
 
     # Initialize Clarify API client with OAuth 2.0 credentials

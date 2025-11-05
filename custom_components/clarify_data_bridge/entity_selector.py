@@ -259,9 +259,19 @@ class EntitySelector:
         _LOGGER.info("Starting entity discovery with filters: domains=%s, min_priority=%s",
                     include_domains, min_priority.name)
 
+        total_scanned = 0
+        filtered_counts = {
+            "domain": 0,
+            "device_class": 0,
+            "priority": 0,
+            "no_numeric": 0,
+            "passed": 0,
+        }
+
         for state in self.hass.states.async_all():
             entity_id = state.entity_id
             domain = entity_id.split(".")[0]
+            total_scanned += 1
 
             # Skip excluded entities
             if entity_id in exclude_entity_set:
@@ -273,8 +283,10 @@ class EntitySelector:
 
             # Check domain filters
             if include_domains and domain not in include_domains:
+                filtered_counts["domain"] += 1
                 continue
             if exclude_domains and domain in exclude_domains:
+                filtered_counts["domain"] += 1
                 continue
 
             # Check regex patterns
@@ -291,21 +303,35 @@ class EntitySelector:
 
             # Check device class filters
             if include_device_classes and metadata.device_class not in include_device_classes:
+                filtered_counts["device_class"] += 1
+                if "humidity" in entity_id:
+                    _LOGGER.debug("Filtered %s by device_class: has=%s, required=%s",
+                                 entity_id, metadata.device_class, include_device_classes)
                 continue
             if exclude_device_classes and metadata.device_class in exclude_device_classes:
+                filtered_counts["device_class"] += 1
                 continue
 
             # Check priority filter
             if metadata.priority.value > min_priority.value:
+                filtered_counts["priority"] += 1
+                if "humidity" in entity_id:
+                    _LOGGER.info("Filtered %s by priority: entity_priority=%s (value=%d) > min=%s (value=%d)",
+                                entity_id, metadata.priority.name, metadata.priority.value,
+                                min_priority.name, min_priority.value)
                 continue
 
             # Check if entity has trackable data
             if not (metadata.has_numeric_state or metadata.numeric_attributes):
+                filtered_counts["no_numeric"] += 1
                 continue
 
+            filtered_counts["passed"] += 1
             discovered_entities.append(metadata)
 
-        _LOGGER.info("Discovered %d trackable entities", len(discovered_entities))
+        _LOGGER.info("Discovered %d trackable entities (scanned %d total)",
+                    len(discovered_entities), total_scanned)
+        _LOGGER.info("Filter breakdown: %s", filtered_counts)
 
         # Sort by priority (high first), then by entity_id
         discovered_entities.sort(key=lambda x: (x.priority.value, x.entity_id))
