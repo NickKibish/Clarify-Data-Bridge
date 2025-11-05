@@ -9,7 +9,7 @@ from typing import Any, TYPE_CHECKING
 
 from pyclarify import Client, DataFrame
 from pyclarify.views.items import Item
-from pyclarify.views.signals import SignalInfo
+from pyclarify.views.signals import Signal, SignalInfo
 from pyclarify.query import Filter
 
 from .credential_manager import create_secure_logger
@@ -347,8 +347,16 @@ class ClarifyClient:
             raise ValueError("Number of input_ids must match number of signals")
 
         try:
-            # Build signals_by_input mapping for the new pyclarify API
-            signals_by_input = {input_id: signal for input_id, signal in zip(input_ids, signals)}
+            # Convert SignalInfo to Signal instances for pyclarify API compatibility
+            # The new pyclarify API expects Signal instances, not SignalInfo
+            validated_signals = []
+            for signal_info in signals:
+                # Convert SignalInfo to Signal using Pydantic model conversion
+                signal = Signal.model_validate(signal_info.model_dump())
+                validated_signals.append(signal)
+
+            # Build signals_by_input mapping with validated Signal instances
+            signals_by_input = {input_id: signal for input_id, signal in zip(input_ids, validated_signals)}
 
             _LOGGER.debug("Saving %d signals to Clarify", len(input_ids))
             # Run save_signals in executor to avoid blocking event loop
@@ -357,7 +365,7 @@ class ClarifyClient:
                 partial(
                     self._client.save_signals,
                     input_ids=input_ids,
-                    signals=signals,
+                    signals=validated_signals,
                     signals_by_input=signals_by_input,
                     create_only=create_only,
                     integration=self.integration_id,

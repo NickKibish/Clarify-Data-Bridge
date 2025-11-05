@@ -250,8 +250,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Initialize OAuth 2.0 token manager
     token_manager = OAuth2TokenManager(hass=hass, credential_manager=credential_manager)
+    # async_register_credentials will automatically start the token manager if not running
     await token_manager.async_register_credentials(entry.entry_id, credentials)
-    await token_manager.async_start()
 
     _LOGGER.info("Phase 8 security managers initialized")
 
