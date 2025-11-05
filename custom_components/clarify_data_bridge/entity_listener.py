@@ -100,6 +100,12 @@ class ClarifyEntityListener:
     async def async_start(self) -> None:
         """Start listening to state changes with intelligent entity discovery."""
         _LOGGER.info("Starting entity listener for domains: %s", self.include_domains)
+        _LOGGER.debug(
+            "Entity listener config: min_priority=%s, include_device_classes=%s, exclude_device_classes=%s",
+            self.min_priority.name,
+            self.include_device_classes,
+            self.exclude_device_classes,
+        )
 
         # Use EntitySelector if available for advanced discovery
         if self.entity_selector:
@@ -114,6 +120,12 @@ class ClarifyEntityListener:
         entity_ids = list(self._discovered_entities.keys())
         _LOGGER.info("Tracking %d entities", len(entity_ids))
 
+        # Log first 10 entities for debugging
+        if entity_ids:
+            sample_entities = entity_ids[:10]
+            _LOGGER.debug("Sample of tracked entities (first 10): %s", sample_entities)
+            _LOGGER.debug("Total discovered entities: %s", len(entity_ids))
+
         # Log entity breakdown by category if using EntitySelector
         if self.entity_selector:
             self._log_entity_discovery_summary()
@@ -125,12 +137,14 @@ class ClarifyEntityListener:
         await self._async_create_signals_for_entities(entity_ids)
 
         # Subscribe to state changes
+        _LOGGER.debug("Subscribing to state changes for %d entities", len(entity_ids))
         unsub = async_track_state_change_event(
             self.hass,
             entity_ids,
             self._async_state_change_listener,
         )
         self._unsub_listeners.append(unsub)
+        _LOGGER.info("Entity listener started successfully - now monitoring %d entities", len(entity_ids))
 
     async def _async_discover_entities_advanced(self) -> None:
         """Discover entities using EntitySelector with advanced filtering."""
@@ -315,13 +329,21 @@ class ClarifyEntityListener:
         new_state: State | None = event.data.get("new_state")
         old_state: State | None = event.data.get("old_state")
 
+        # DEBUG: Log every state change callback
+        _LOGGER.debug("State change callback triggered for: %s (new_state=%s)", entity_id, new_state.state if new_state else "None")
+
         if not entity_id or not new_state:
+            _LOGGER.debug("Ignoring state change - missing entity_id or new_state")
             return
 
         # Ignore unavailable/unknown states
         if new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            _LOGGER.debug("Ignoring state change for %s - state is %s", entity_id, new_state.state)
             self.events_ignored += 1
             return
+
+        # DEBUG: Log that we're processing
+        _LOGGER.debug("Processing state change: %s = %s (was %s)", entity_id, new_state.state, old_state.state if old_state else "None")
 
         # Process the state change
         self.hass.async_create_task(
@@ -347,13 +369,18 @@ class ClarifyEntityListener:
             priority = metadata.priority if metadata else DataPriority.LOW
             device_class = metadata.device_class if metadata else None
 
+            _LOGGER.debug("Processing %s: priority=%s, device_class=%s", entity_id, priority.name, device_class)
+
             # Ensure signal exists
             input_id = await self.signal_manager.async_ensure_signal(entity_id, new_state)
+            _LOGGER.debug("Signal ensured for %s: input_id=%s", entity_id, input_id)
 
             # Extract and validate numeric values from state
             values = self._extract_and_validate_numeric_values(entity_id, new_state, device_class)
+            _LOGGER.debug("Extracted values for %s: %s", entity_id, values)
 
             if not values:
+                _LOGGER.debug("No valid numeric values extracted for %s - ignoring", entity_id)
                 self.events_ignored += 1
                 return
 
@@ -372,6 +399,7 @@ class ClarifyEntityListener:
                     )
 
                 # Add data point with priority information
+                _LOGGER.debug("Adding data point: %s = %s (priority=%s, timestamp=%s)", data_input_id, value, priority.name, timestamp)
                 await self.coordinator.add_data_point(
                     input_id=data_input_id,
                     value=value,
@@ -383,15 +411,15 @@ class ClarifyEntityListener:
 
             self.events_processed += 1
 
-            _LOGGER.debug(
-                "Processed state change for %s: %d values added (priority=%s)",
+            _LOGGER.info(
+                "✓ Processed state change for %s: %d values added (priority=%s)",
                 entity_id,
                 len(values),
                 priority.name,
             )
 
         except Exception as err:
-            _LOGGER.error("Error processing state change for %s: %s", entity_id, err)
+            _LOGGER.error("Error processing state change for %s: %s", entity_id, err, exc_info=True)
             self.events_ignored += 1
 
     def _extract_numeric_values(
@@ -455,6 +483,8 @@ class ClarifyEntityListener:
         """
         validated_values: dict[str, float] = {}
 
+        _LOGGER.debug("Validating %s: state=%s, device_class=%s", entity_id, state.state, device_class)
+
         # Validate main state value
         result = self.data_validator.validate_state(
             state=state,
@@ -462,17 +492,24 @@ class ClarifyEntityListener:
             device_class=device_class,
         )
 
+        _LOGGER.debug("Validation result for %s: %s (value=%s → %s)",
+                     entity_id, result.result, result.original_value, result.value)
+
         if result.result == ValidationResult.VALID:
             validated_values[""] = result.value
+            _LOGGER.debug("✓ Main state validated: %s = %s", entity_id, result.value)
         elif result.result != ValidationResult.INVALID_STATE:
             # Log validation failures (except invalid states which are expected)
-            _LOGGER.debug(
-                "Validation failed for %s: %s (value=%s)",
+            _LOGGER.warning(
+                "✗ Validation failed for %s: %s (value=%s, result=%s)",
                 entity_id,
                 result.reason,
                 result.original_value,
+                result.result,
             )
             self.validation_failed += 1
+        else:
+            _LOGGER.debug("State is not numeric for %s: %s", entity_id, state.state)
 
         # Validate numeric attributes
         if state.attributes:

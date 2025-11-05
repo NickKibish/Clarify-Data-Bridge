@@ -195,18 +195,21 @@ class ClarifyDataCoordinator:
             self._data_buffer[input_id].append((timestamp, value))
 
             buffer_stats = self.buffer_manager.get_buffer_sizes()
-            _LOGGER.debug(
-                "Added data point: input_id=%s, value=%.2f, priority=%s, buffer=%s",
+            _LOGGER.info(
+                "✓ Added data point to buffer: %s=%.2f (priority=%s, total_buffer=%d, high=%d, med=%d, low=%d)",
                 input_id,
                 value,
                 priority.name,
-                buffer_stats,
+                buffer_stats["total"],
+                buffer_stats.get("high", 0),
+                buffer_stats.get("medium", 0),
+                buffer_stats.get("low", 0),
             )
 
             # Check if immediate flush is needed
             if flush_trigger:
                 _LOGGER.info(
-                    "Flush triggered: %s (buffer size: %d)",
+                    "⚡ Flush triggered: %s (buffer size: %d)",
                     flush_trigger.value,
                     buffer_stats["total"],
                 )
@@ -240,11 +243,21 @@ class ClarifyDataCoordinator:
         Args:
             trigger: Flush trigger type.
         """
+        _LOGGER.info("Attempting buffer flush (trigger=%s)", trigger.value)
+
+        # Get current buffer stats before flush
+        buffer_stats = self.buffer_manager.get_buffer_sizes()
+        _LOGGER.info("Buffer state before flush: total=%d, high=%d, med=%d, low=%d",
+                    buffer_stats.get("total", 0),
+                    buffer_stats.get("high", 0),
+                    buffer_stats.get("medium", 0),
+                    buffer_stats.get("low", 0))
+
         # Get data from buffer manager
         buffer_data = self.buffer_manager.get_flush_data(trigger)
 
         if not buffer_data:
-            _LOGGER.debug("No data to flush for trigger: %s", trigger.value)
+            _LOGGER.warning("⚠ No data to flush for trigger: %s (buffer was empty!)", trigger.value)
             return
 
         # Convert buffer entries to dataframe format
