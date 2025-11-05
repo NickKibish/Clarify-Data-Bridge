@@ -3,10 +3,14 @@
 # Integration domain
 DOMAIN = "clarify_data_bridge"
 
-# Configuration keys
-CONF_API_KEY = "api_key"
+# Configuration keys (OAuth 2.0 Client Credentials)
+CONF_CLIENT_ID = "client_id"
+CONF_CLIENT_SECRET = "client_secret"
 CONF_INTEGRATION_ID = "integration_id"
 CONF_UPDATE_INTERVAL = "update_interval"
+
+# Legacy configuration keys (for migration compatibility)
+CONF_API_KEY = "api_key"
 
 # Default values
 DEFAULT_UPDATE_INTERVAL = 60  # seconds

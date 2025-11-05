@@ -8,9 +8,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
+from .clarify_client import (
+    ClarifyClient,
+    ClarifyAuthenticationError,
+    ClarifyConnectionError,
+)
 from .const import (
     DOMAIN,
-    CONF_API_KEY,
+    CONF_CLIENT_ID,
+    CONF_CLIENT_SECRET,
     CONF_INTEGRATION_ID,
     ENTRY_DATA_CLIENT,
 )
@@ -30,31 +36,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Clarify Data Bridge from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    api_key = entry.data[CONF_API_KEY]
+    client_id = entry.data[CONF_CLIENT_ID]
+    client_secret = entry.data[CONF_CLIENT_SECRET]
     integration_id = entry.data[CONF_INTEGRATION_ID]
 
-    _LOGGER.debug("Setting up Clarify Data Bridge integration")
+    _LOGGER.debug("Setting up Clarify Data Bridge integration for: %s", integration_id)
 
-    # TODO: Initialize Clarify API client
-    # client = ClarifyClient(api_key=api_key, integration_id=integration_id)
+    # Initialize Clarify API client with OAuth 2.0 credentials
+    client = ClarifyClient(
+        client_id=client_id,
+        client_secret=client_secret,
+        integration_id=integration_id,
+    )
 
     try:
-        # TODO: Verify API connection
-        _LOGGER.info("Successfully connected to Clarify API")
-    except Exception as err:
-        _LOGGER.error("Failed to connect to Clarify API: %s", err)
+        # Establish connection and verify credentials
+        await client.async_connect()
+        await client.async_verify_connection()
+        _LOGGER.info("Successfully connected to Clarify API for integration: %s", integration_id)
+    except ClarifyAuthenticationError as err:
+        _LOGGER.error("Authentication failed for integration %s: %s", integration_id, err)
+        raise ConfigEntryNotReady(f"Authentication failed: {err}") from err
+    except ClarifyConnectionError as err:
+        _LOGGER.error("Connection failed for integration %s: %s", integration_id, err)
         raise ConfigEntryNotReady(f"Could not connect to Clarify: {err}") from err
+    except Exception as err:
+        _LOGGER.error("Unexpected error setting up integration %s: %s", integration_id, err)
+        raise ConfigEntryNotReady(f"Setup failed: {err}") from err
 
     # Store client
     hass.data[DOMAIN][entry.entry_id] = {
-        ENTRY_DATA_CLIENT: None,  # TODO: Store actual client
+        ENTRY_DATA_CLIENT: client,
     }
 
     # Set up platforms
     if PLATFORMS:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _LOGGER.info("Clarify Data Bridge integration setup completed")
+    _LOGGER.info("Clarify Data Bridge integration setup completed for: %s", integration_id)
     return True
 
 
@@ -72,9 +91,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if PLATFORMS:
         unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    # Remove data
+    # Clean up client resources
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        entry_data = hass.data[DOMAIN].pop(entry.entry_id)
+        client = entry_data.get(ENTRY_DATA_CLIENT)
+        if client:
+            client.close()
+            _LOGGER.debug("Closed Clarify client connection")
         _LOGGER.info("Clarify Data Bridge integration unloaded successfully")
 
     return unload_ok
