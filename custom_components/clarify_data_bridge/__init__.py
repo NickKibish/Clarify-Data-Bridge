@@ -25,6 +25,8 @@ from .historical_sync import HistoricalDataSync
 from .config_schema import ConfigurationManager
 from .performance_tuning import PerformanceManager
 from .health_monitor import IntegrationHealthMonitor
+from .credential_manager import CredentialManager, OAuth2Credentials
+from .oauth2_handler import OAuth2TokenManager
 from .const import (
     DOMAIN,
     CONF_CLIENT_ID,
@@ -54,6 +56,8 @@ from .const import (
     ENTRY_DATA_CONFIG_MANAGER,
     ENTRY_DATA_PERFORMANCE_MANAGER,
     ENTRY_DATA_HEALTH_MONITOR,
+    ENTRY_DATA_CREDENTIAL_MANAGER,
+    ENTRY_DATA_TOKEN_MANAGER,
     SERVICE_PUBLISH_ENTITY,
     SERVICE_PUBLISH_ENTITIES,
     SERVICE_PUBLISH_ALL_TRACKED,
@@ -206,6 +210,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     health_monitor = IntegrationHealthMonitor(hass=hass)
 
+    # Initialize Phase 8: Security and Privacy managers
+    credential_manager = CredentialManager(hass=hass)
+    await credential_manager.async_load()
+
+    # Store credentials securely
+    credentials = OAuth2Credentials(
+        client_id=client_id,
+        client_secret=client_secret,
+        integration_id=integration_id,
+    )
+    await credential_manager.async_store_credentials(entry.entry_id, credentials)
+
+    # Initialize OAuth 2.0 token manager
+    token_manager = OAuth2TokenManager(hass=hass, credential_manager=credential_manager)
+    await token_manager.async_register_credentials(entry.entry_id, credentials)
+    await token_manager.async_start()
+
+    _LOGGER.info("Phase 8 security managers initialized")
+
     # Store components
     hass.data[DOMAIN][entry.entry_id] = {
         ENTRY_DATA_CLIENT: client,
@@ -218,6 +241,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ENTRY_DATA_CONFIG_MANAGER: config_manager,
         ENTRY_DATA_PERFORMANCE_MANAGER: performance_manager,
         ENTRY_DATA_HEALTH_MONITOR: health_monitor,
+        ENTRY_DATA_CREDENTIAL_MANAGER: credential_manager,
+        ENTRY_DATA_TOKEN_MANAGER: token_manager,
     }
 
     # Register services (only once)
@@ -275,6 +300,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if client:
             client.close()
             _LOGGER.debug("Closed Clarify client connection")
+
+        # Stop Phase 8 token manager
+        token_manager = entry_data.get(ENTRY_DATA_TOKEN_MANAGER)
+        if token_manager:
+            await token_manager.async_stop()
+            _LOGGER.debug("Stopped OAuth 2.0 token manager")
+
+        # Cleanup Phase 8 credential manager
+        credential_manager = entry_data.get(ENTRY_DATA_CREDENTIAL_MANAGER)
+        if credential_manager:
+            await credential_manager.async_delete_credentials(entry.entry_id)
+            _LOGGER.debug("Cleaned up credential storage")
 
         _LOGGER.info("Clarify Data Bridge integration unloaded successfully")
 

@@ -339,3 +339,29 @@ EVENT_BUFFER_FLUSHED = f"{DOMAIN}_buffer_flushed"
 EVENT_TRANSMISSION_SUCCESS = f"{DOMAIN}_transmission_success"
 EVENT_TRANSMISSION_FAILED = f"{DOMAIN}_transmission_failed"
 EVENT_HEALTH_STATUS_CHANGED = f"{DOMAIN}_health_status_changed"
+
+# ============================================================================
+# Phase 8: Security and Privacy
+# ============================================================================
+
+# Credential storage
+CREDENTIAL_STORAGE_VERSION = 1
+CREDENTIAL_STORAGE_KEY = "clarify_credentials"
+
+# Token refresh settings
+TOKEN_REFRESH_BUFFER_MINUTES = 5  # Refresh 5 minutes before expiration
+TOKEN_CHECK_INTERVAL_SECONDS = 300  # Check tokens every 5 minutes
+MAX_REFRESH_RETRIES = 3
+REFRESH_RETRY_DELAY_SECONDS = 30
+
+# Credential validation
+MIN_CLIENT_ID_LENGTH = 10
+MIN_CLIENT_SECRET_LENGTH = 20
+VALIDATION_CACHE_TIMEOUT_MINUTES = 5
+
+# Secure logging
+MASK_CREDENTIAL_CHARS = 4  # Number of characters to show in masked strings
+
+# Credential entry data keys
+ENTRY_DATA_CREDENTIAL_MANAGER = "credential_manager"
+ENTRY_DATA_TOKEN_MANAGER = "token_manager"

@@ -218,6 +218,28 @@ clarify_data_bridge:
 
 **See [ADVANCED_FEATURES.md](./ADVANCED_FEATURES.md) for comprehensive guide with examples.**
 
+### 🔒 Security and Privacy (Phase 8)
+- **Secure credential storage**: Encrypted storage using Home Assistant's Storage API
+- **Multi-stage validation**: Format validation + connection testing with detailed feedback
+- **OAuth 2.0 token management**: Automatic token refresh with 5-minute buffer before expiration
+- **Token monitoring**: Automatic monitoring every 5 minutes with retry logic
+- **Credential rotation**: Safe credential rotation without downtime or service interruption
+- **Secure logging**: Automatic masking of sensitive data (credentials, tokens, secrets)
+- **Credential lifecycle**: Automatic cleanup on integration unload
+- **Status monitoring**: Comprehensive credential and token status tracking
+
+#### Security Features
+- Format validation before API calls (client ID, secret, integration ID)
+- Connection validation with detailed error classification
+- Validation result caching (5 minutes) to reduce API calls
+- Automatic token refresh 5 minutes before expiration
+- Retry logic with exponential backoff (3 attempts, 30s delay)
+- Refresh callbacks for dependent service updates
+- Secure logger with 8 sensitive data patterns masked
+- Manual credential rotation with rollback on failure
+
+**See [SECURITY.md](./SECURITY.md) for comprehensive security guide with examples.**
+
 ### 📈 Data Retrieval
 - Fetch data back from Clarify
 - Statistics sensors (latest, average, min, max)
@@ -236,6 +258,7 @@ clarify_data_bridge:
 - **[Data Collection & Buffering](./DATA_COLLECTION.md)**: Guide to data validation, conversion, and intelligent buffering strategies
 - **[Publishing Strategies](./PUBLISHING.md)**: Guide to automatic publishing of signals as Clarify.io items
 - **[Advanced Features](./ADVANCED_FEATURES.md)**: Data aggregation, custom services, and automation integration (Phase 7)
+- **[Security and Privacy](./SECURITY.md)**: Credential management, OAuth 2.0 tokens, and secure logging (Phase 8)
 - **Configuration Examples**: See CONFIG_UI.md for UI examples and ENTITY_SELECTION.md for YAML examples
 - **API Reference**: Entity metadata structure and priority levels
 

@@ -59,31 +59,32 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
+    from .oauth2_handler import CredentialValidator
+
     client_id = data[CONF_CLIENT_ID]
     client_secret = data[CONF_CLIENT_SECRET]
     integration_id = data[CONF_INTEGRATION_ID]
 
-    # Test Clarify API connection with OAuth 2.0 credentials
-    try:
-        client = ClarifyClient(
-            hass=hass,
-            client_id=client_id,
-            client_secret=client_secret,
-            integration_id=integration_id,
-        )
-        await client.async_connect()
-        await client.async_verify_connection()
-        _LOGGER.info("Successfully validated Clarify credentials for integration: %s", integration_id)
-    except ClarifyAuthenticationError as err:
-        _LOGGER.error("Authentication failed: %s", err)
-        raise InvalidAuth from err
-    except ClarifyConnectionError as err:
-        _LOGGER.error("Connection failed: %s", err)
-        raise CannotConnect from err
-    finally:
-        # Clean up client resources
-        if 'client' in locals():
-            client.close()
+    # Validate credentials using Phase 8 validator
+    validator = CredentialValidator(hass)
+    is_valid, error_message, details = await validator.async_validate_and_test(
+        client_id, client_secret, integration_id
+    )
+
+    if not is_valid:
+        _LOGGER.error("Credential validation failed: %s - %s", error_message, details)
+        # Determine error type based on validation step
+        if details.get("step") == "format_validation":
+            # Format validation failed - likely invalid format
+            raise InvalidAuth(error_message)
+        elif details.get("status") in ["invalid", "revoked"]:
+            # Authentication failed
+            raise InvalidAuth(error_message)
+        else:
+            # Connection or other error
+            raise CannotConnect(error_message)
+
+    _LOGGER.info("Successfully validated Clarify credentials for integration: %s", integration_id)
 
     # Return info that you want to store in the config entry
     return {

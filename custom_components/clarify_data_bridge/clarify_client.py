@@ -12,10 +12,12 @@ from pyclarify.views.items import Item
 from pyclarify.views.signals import SignalInfo
 from pyclarify.query import Filter
 
+from .credential_manager import create_secure_logger
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = create_secure_logger(__name__)
 
 
 class ClarifyClientError(Exception):
@@ -77,7 +79,6 @@ class ClarifyClient:
             integration_id,
             api_url,
         )
-        _LOGGER.debug("Client ID: %s...", client_id[:8] if len(client_id) > 8 else "***")
 
     def _create_credentials_file(self) -> str:
         """Create a temporary credentials file for pyclarify.
