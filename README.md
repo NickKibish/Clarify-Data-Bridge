@@ -196,6 +196,28 @@ clarify_data_bridge:
 - **Uptime tracking**: Comprehensive uptime and reliability metrics
 - **Automated recommendations**: Context-aware optimization suggestions
 
+### 🚀 Advanced Features (Phase 7)
+- **Data Aggregation**: 10 aggregation methods (average, median, min, max, sum, first, last, count, change-only, none)
+- **Aggregation by window**: Reduce high-frequency sensor data volume by 80-99%
+- **Change-only detection**: Only transmit when values change significantly
+- **Historical data sync**: Export data from Home Assistant recorder to Clarify.io
+- **Manual control services**: 7 services for flush, sync, config, health, and statistics
+- **Automation integration**: 5 event types for Home Assistant automations
+- **Dynamic configuration**: Apply templates, set per-entity config, change performance profiles
+- **Health reporting**: Generate comprehensive diagnostic reports on demand
+- **Statistics management**: Reset and monitor aggregation effectiveness
+
+#### Phase 7 Services
+- `sync_historical`: Export historical data with configurable batch sizes
+- `flush_buffer`: Manually trigger immediate data transmission
+- `apply_template`: Apply configuration templates to multiple entities
+- `set_entity_config`: Configure individual entity settings dynamically
+- `set_performance_profile`: Change performance profile at runtime
+- `get_health_report`: Generate health diagnostic report
+- `reset_statistics`: Reset integration statistics and counters
+
+**See [ADVANCED_FEATURES.md](./ADVANCED_FEATURES.md) for comprehensive guide with examples.**
+
 ### 📈 Data Retrieval
 - Fetch data back from Clarify
 - Statistics sensors (latest, average, min, max)
@@ -213,6 +235,7 @@ clarify_data_bridge:
 - **[Entity Selection Guide](./ENTITY_SELECTION.md)**: Comprehensive guide to entity filtering, classification, and configuration
 - **[Data Collection & Buffering](./DATA_COLLECTION.md)**: Guide to data validation, conversion, and intelligent buffering strategies
 - **[Publishing Strategies](./PUBLISHING.md)**: Guide to automatic publishing of signals as Clarify.io items
+- **[Advanced Features](./ADVANCED_FEATURES.md)**: Data aggregation, custom services, and automation integration (Phase 7)
 - **Configuration Examples**: See CONFIG_UI.md for UI examples and ENTITY_SELECTION.md for YAML examples
 - **API Reference**: Entity metadata structure and priority levels
 
