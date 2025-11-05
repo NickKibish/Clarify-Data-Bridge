@@ -14,6 +14,13 @@ from pyclarify import DataFrame
 
 from .clarify_client import ClarifyClient, ClarifyConnectionError
 from .const import DEFAULT_BATCH_INTERVAL, DEFAULT_MAX_BATCH_SIZE
+from .buffer_strategy import (
+    BufferStrategy,
+    BufferStrategyManager,
+    BufferEntry,
+    FlushTrigger,
+)
+from .entity_selector import DataPriority
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +29,14 @@ class ClarifyDataCoordinator:
     """Coordinator for batching and sending data to Clarify.
 
     This coordinator accumulates state changes from Home Assistant entities
-    and sends them in batches to Clarify at regular intervals.
+    and sends them in batches to Clarify using intelligent buffering strategies.
+
+    Supports multiple buffering strategies:
+    - Time-based: Flush every X seconds
+    - Size-based: Flush when buffer reaches Y entries
+    - Priority-based: Immediate flush for high-priority data
+    - Hybrid: Combination of time and size
+    - Adaptive: Adjust based on data rate
     """
 
     def __init__(
@@ -31,6 +45,8 @@ class ClarifyDataCoordinator:
         client: ClarifyClient,
         batch_interval: int = DEFAULT_BATCH_INTERVAL,
         max_batch_size: int = DEFAULT_MAX_BATCH_SIZE,
+        buffer_strategy: BufferStrategy = BufferStrategy.HYBRID,
+        priority_immediate: bool = True,
     ) -> None:
         """Initialize the data coordinator.
 
@@ -39,28 +55,46 @@ class ClarifyDataCoordinator:
             client: ClarifyClient instance for API communication.
             batch_interval: Interval in seconds between batch sends.
             max_batch_size: Maximum number of data points per batch.
+            buffer_strategy: Buffering strategy to use.
+            priority_immediate: Whether to flush high-priority data immediately.
         """
         self.hass = hass
         self.client = client
         self.batch_interval = batch_interval
         self.max_batch_size = max_batch_size
 
-        # Data buffer: {input_id: [(timestamp, value), ...]}
+        # Initialize buffer strategy manager
+        self.buffer_manager = BufferStrategyManager(
+            strategy=buffer_strategy,
+            time_interval=batch_interval,
+            size_limit=max_batch_size,
+            priority_immediate=priority_immediate,
+            priority_threshold=DataPriority.HIGH,
+        )
+
+        # Legacy buffer for backward compatibility (simple dict backup)
         self._data_buffer: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
         self._buffer_lock = asyncio.Lock()
+
+        # Track entity priorities for buffer strategy
+        self._entity_priorities: dict[str, DataPriority] = {}
 
         # Track last send time for diagnostics
         self.last_send_time: datetime | None = None
         self.total_data_points_sent = 0
         self.failed_sends = 0
+        self.successful_sends = 0
 
         # Timer for periodic sends
         self._unsub_timer = None
+        self._check_timer = None
 
-        _LOGGER.debug(
-            "Initialized ClarifyDataCoordinator with batch_interval=%ds, max_batch_size=%d",
+        _LOGGER.info(
+            "Initialized ClarifyDataCoordinator: strategy=%s, interval=%ds, max_size=%d, priority_immediate=%s",
+            buffer_strategy.value,
             batch_interval,
             max_batch_size,
+            priority_immediate,
         )
 
     async def start(self) -> None:
@@ -74,27 +108,55 @@ class ClarifyDataCoordinator:
         # Schedule periodic batch sends
         self._unsub_timer = async_track_time_interval(
             self.hass,
-            self._async_send_batch,
+            self._async_periodic_check,
             timedelta(seconds=self.batch_interval),
+        )
+
+        # Schedule more frequent buffer checks (every 10 seconds)
+        # For priority-based immediate flushing
+        self._check_timer = async_track_time_interval(
+            self.hass,
+            self._async_check_buffer,
+            timedelta(seconds=10),
         )
 
     async def stop(self) -> None:
         """Stop the coordinator and send any remaining data."""
         _LOGGER.info("Stopping ClarifyDataCoordinator")
 
-        # Cancel timer
+        # Cancel timers
         if self._unsub_timer is not None:
             self._unsub_timer()
             self._unsub_timer = None
 
+        if self._check_timer is not None:
+            self._check_timer()
+            self._check_timer = None
+
         # Send any remaining data
-        await self._async_send_batch(None)
+        await self._async_flush_buffer(FlushTrigger.SHUTDOWN)
+
+    def register_entity_priority(
+        self,
+        entity_id: str,
+        priority: DataPriority,
+    ) -> None:
+        """Register an entity's priority level.
+
+        Args:
+            entity_id: Entity ID.
+            priority: Priority level.
+        """
+        self._entity_priorities[entity_id] = priority
 
     async def add_data_point(
         self,
         input_id: str,
         value: float,
         timestamp: datetime | None = None,
+        entity_id: str | None = None,
+        priority: DataPriority | None = None,
+        device_class: str | None = None,
     ) -> None:
         """Add a data point to the batch buffer.
 
@@ -102,49 +164,123 @@ class ClarifyDataCoordinator:
             input_id: Unique input ID for the signal.
             value: Numeric value to send.
             timestamp: Timestamp for the data point (defaults to now).
+            entity_id: Entity ID (for priority lookup).
+            priority: Priority level (optional, looked up if not provided).
+            device_class: Device class (for logging/metrics).
         """
         if timestamp is None:
             timestamp = dt_util.utcnow()
 
-        async with self._buffer_lock:
-            self._data_buffer[input_id].append((timestamp, value))
-            buffer_size = sum(len(points) for points in self._data_buffer.values())
+        # Determine priority
+        if priority is None and entity_id:
+            priority = self._entity_priorities.get(entity_id, DataPriority.LOW)
+        elif priority is None:
+            priority = DataPriority.LOW
 
+        # Create buffer entry
+        entry = BufferEntry(
+            input_id=input_id,
+            value=value,
+            timestamp=timestamp,
+            priority=priority,
+            entity_id=entity_id,
+            device_class=device_class,
+        )
+
+        async with self._buffer_lock:
+            # Add to buffer manager
+            flush_trigger = self.buffer_manager.add_entry(entry)
+
+            # Also add to legacy buffer
+            self._data_buffer[input_id].append((timestamp, value))
+
+            buffer_stats = self.buffer_manager.get_buffer_sizes()
             _LOGGER.debug(
-                "Added data point for %s: value=%.2f, timestamp=%s (buffer size: %d)",
+                "Added data point: input_id=%s, value=%.2f, priority=%s, buffer=%s",
                 input_id,
                 value,
-                timestamp.isoformat(),
-                buffer_size,
+                priority.name,
+                buffer_stats,
             )
 
-            # If buffer exceeds max size, trigger immediate send
-            if buffer_size >= self.max_batch_size:
+            # Check if immediate flush is needed
+            if flush_trigger:
                 _LOGGER.info(
-                    "Buffer size (%d) exceeds max (%d), triggering immediate send",
-                    buffer_size,
-                    self.max_batch_size,
+                    "Flush triggered: %s (buffer size: %d)",
+                    flush_trigger.value,
+                    buffer_stats["total"],
                 )
-                await self._async_send_batch(None)
+                await self._async_flush_buffer(flush_trigger)
 
-    async def _async_send_batch(self, now: datetime | None) -> None:
-        """Send accumulated data to Clarify.
+    async def _async_periodic_check(self, now: datetime | None) -> None:
+        """Periodic check for time-based flushing.
 
         Args:
-            now: Current time (unused, required for time interval callback).
+            now: Current time (from timer callback).
+        """
+        await self._async_check_buffer(now)
+
+    async def _async_check_buffer(self, now: datetime | None) -> None:
+        """Check if buffer should be flushed.
+
+        Args:
+            now: Current time (from timer callback).
         """
         async with self._buffer_lock:
-            if not self._data_buffer:
-                _LOGGER.debug("No data to send, buffer is empty")
-                return
+            # Let buffer manager determine if flush is needed
+            flush_trigger = self.buffer_manager._should_flush()
 
-            # Copy and clear buffer
-            data_to_send = dict(self._data_buffer)
+            if flush_trigger:
+                _LOGGER.debug("Buffer check triggered flush: %s", flush_trigger.value)
+                await self._async_flush_buffer(flush_trigger)
+
+    async def _async_flush_buffer(self, trigger: FlushTrigger) -> None:
+        """Flush buffer based on trigger.
+
+        Args:
+            trigger: Flush trigger type.
+        """
+        # Get data from buffer manager
+        buffer_data = self.buffer_manager.get_flush_data(trigger)
+
+        if not buffer_data:
+            _LOGGER.debug("No data to flush for trigger: %s", trigger.value)
+            return
+
+        # Convert buffer entries to dataframe format
+        data_to_send: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
+
+        for priority_level, entries in buffer_data.items():
+            for entry in entries:
+                data_to_send[entry.input_id].append((entry.timestamp, entry.value))
+
+        # Also include any data from legacy buffer
+        if self._data_buffer:
+            for input_id, points in self._data_buffer.items():
+                data_to_send[input_id].extend(points)
             self._data_buffer.clear()
 
+        if not data_to_send:
+            _LOGGER.debug("No data to send after buffer conversion")
+            return
+
+        # Send data
+        await self._async_send_data(data_to_send, trigger)
+
+    async def _async_send_data(
+        self,
+        data: dict[str, list[tuple[datetime, float]]],
+        trigger: FlushTrigger,
+    ) -> None:
+        """Send data to Clarify.
+
+        Args:
+            data: Data to send.
+            trigger: Flush trigger (for logging).
+        """
         try:
             # Convert buffer to pyclarify DataFrame format
-            dataframe = self._build_dataframe(data_to_send)
+            dataframe = self._build_dataframe(data)
 
             if not dataframe.times:
                 _LOGGER.debug("No valid data points to send")
@@ -152,7 +288,8 @@ class ClarifyDataCoordinator:
 
             # Send to Clarify
             _LOGGER.info(
-                "Sending batch to Clarify: %d timestamps, %d series",
+                "Sending batch to Clarify (trigger=%s): %d timestamps, %d series",
+                trigger.value,
                 len(dataframe.times),
                 len(dataframe.series),
             )
@@ -166,11 +303,13 @@ class ClarifyDataCoordinator:
                 for series in dataframe.series.values()
             )
             self.total_data_points_sent += data_points
+            self.successful_sends += 1
 
             _LOGGER.info(
-                "Successfully sent batch: %d data points (total sent: %d)",
+                "Successfully sent batch: %d data points (total sent: %d, successful: %d)",
                 data_points,
                 self.total_data_points_sent,
+                self.successful_sends,
             )
 
         except ClarifyConnectionError as err:
@@ -179,7 +318,7 @@ class ClarifyDataCoordinator:
 
             # Put data back in buffer for retry
             async with self._buffer_lock:
-                for input_id, points in data_to_send.items():
+                for input_id, points in data.items():
                     self._data_buffer[input_id].extend(points)
 
             _LOGGER.warning(
@@ -190,6 +329,14 @@ class ClarifyDataCoordinator:
         except Exception as err:
             self.failed_sends += 1
             _LOGGER.exception("Unexpected error sending batch: %s", err)
+
+    async def _async_send_batch(self, now: datetime | None) -> None:
+        """Legacy method for compatibility. Redirects to buffer check.
+
+        Args:
+            now: Current time (unused, required for time interval callback).
+        """
+        await self._async_check_buffer(now)
 
     def _build_dataframe(
         self, data: dict[str, list[tuple[datetime, float]]]
@@ -235,6 +382,32 @@ class ClarifyDataCoordinator:
         )
 
         return dataframe
+
+    async def manual_flush(self) -> None:
+        """Manually trigger a buffer flush."""
+        async with self._buffer_lock:
+            await self._async_flush_buffer(FlushTrigger.MANUAL)
+
+    def get_statistics(self) -> dict[str, Any]:
+        """Get coordinator statistics.
+
+        Returns:
+            Dictionary of statistics.
+        """
+        buffer_metrics = self.buffer_manager.get_metrics()
+
+        return {
+            "total_data_points_sent": self.total_data_points_sent,
+            "successful_sends": self.successful_sends,
+            "failed_sends": self.failed_sends,
+            "last_send_time": (
+                self.last_send_time.isoformat() if self.last_send_time else None
+            ),
+            "buffer_strategy": self.buffer_manager.strategy.value,
+            "buffer_metrics": buffer_metrics,
+            "legacy_buffer_size": self.buffer_size,
+            "legacy_buffer_signals": self.buffer_signals,
+        }
 
     @property
     def buffer_size(self) -> int:

@@ -1,6 +1,7 @@
 """Entity listener for tracking Home Assistant state changes."""
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 from typing import Any
 
@@ -16,6 +17,7 @@ from .coordinator import ClarifyDataCoordinator
 from .signal_manager import ClarifySignalManager
 from .entity_selector import EntitySelector, EntityMetadata, DataPriority
 from .const import SUPPORTED_DOMAINS, NUMERIC_ATTRIBUTES
+from .data_validator import DataValidator, ValidationResult
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,9 +78,17 @@ class ClarifyEntityListener:
         # Track subscriptions
         self._unsub_listeners: list[callable] = []
 
+        # Initialize data validator
+        self.data_validator = DataValidator(
+            stale_threshold=timedelta(minutes=5),  # Data older than 5 minutes is stale
+            validate_ranges=True,
+            track_changes_only=False,  # Track all changes, not just value changes
+        )
+
         # Statistics
         self.events_processed = 0
         self.events_ignored = 0
+        self.validation_failed = 0
 
         _LOGGER.debug(
             "Initialized ClarifyEntityListener with domains: %s, excluded: %d entities, min_priority: %s",
@@ -107,6 +117,9 @@ class ClarifyEntityListener:
         # Log entity breakdown by category if using EntitySelector
         if self.entity_selector:
             self._log_entity_discovery_summary()
+
+        # Register entity priorities with coordinator
+        self._register_entity_priorities()
 
         # Create signals for all entities
         await self._async_create_signals_for_entities(entity_ids)
@@ -186,6 +199,16 @@ class ClarifyEntityListener:
         ]
         if high_priority:
             _LOGGER.info("  High priority entities (%d): %s", len(high_priority), high_priority[:10])
+
+    def _register_entity_priorities(self) -> None:
+        """Register entity priorities with the coordinator for priority-based buffering."""
+        for entity_id, metadata in self._discovered_entities.items():
+            self.coordinator.register_entity_priority(entity_id, metadata.priority)
+
+        _LOGGER.debug(
+            "Registered %d entity priorities with coordinator",
+            len(self._discovered_entities),
+        )
 
     async def async_stop(self) -> None:
         """Stop listening to state changes."""
@@ -319,17 +342,22 @@ class ClarifyEntityListener:
             old_state: Previous state.
         """
         try:
+            # Get entity metadata for priority and device class
+            metadata = self._discovered_entities.get(entity_id)
+            priority = metadata.priority if metadata else DataPriority.LOW
+            device_class = metadata.device_class if metadata else None
+
             # Ensure signal exists
             input_id = await self.signal_manager.async_ensure_signal(entity_id, new_state)
 
-            # Extract numeric values from state
-            values = self._extract_numeric_values(entity_id, new_state)
+            # Extract and validate numeric values from state
+            values = self._extract_and_validate_numeric_values(entity_id, new_state, device_class)
 
             if not values:
                 self.events_ignored += 1
                 return
 
-            # Add data points to coordinator
+            # Add data points to coordinator with priority
             timestamp = new_state.last_updated
 
             for suffix, value in values.items():
@@ -343,19 +371,23 @@ class ClarifyEntityListener:
                         entity_id, suffix, new_state, data_input_id
                     )
 
-                # Add data point
+                # Add data point with priority information
                 await self.coordinator.add_data_point(
                     input_id=data_input_id,
                     value=value,
                     timestamp=timestamp,
+                    entity_id=entity_id,
+                    priority=priority,
+                    device_class=device_class,
                 )
 
             self.events_processed += 1
 
             _LOGGER.debug(
-                "Processed state change for %s: %d values added",
+                "Processed state change for %s: %d values added (priority=%s)",
                 entity_id,
                 len(values),
+                priority.name,
             )
 
         except Exception as err:
@@ -402,6 +434,70 @@ class ClarifyEntityListener:
                         continue
 
         return values
+
+    def _extract_and_validate_numeric_values(
+        self,
+        entity_id: str,
+        state: State,
+        device_class: str | None = None,
+    ) -> dict[str, float]:
+        """Extract and validate numeric values from entity state.
+
+        Uses DataValidator to ensure data quality.
+
+        Args:
+            entity_id: Entity ID.
+            state: Entity state.
+            device_class: Device class for validation.
+
+        Returns:
+            Dictionary of {suffix: value} pairs for valid values only.
+        """
+        validated_values: dict[str, float] = {}
+
+        # Validate main state value
+        result = self.data_validator.validate_state(
+            state=state,
+            entity_id=entity_id,
+            device_class=device_class,
+        )
+
+        if result.result == ValidationResult.VALID:
+            validated_values[""] = result.value
+        elif result.result != ValidationResult.INVALID_STATE:
+            # Log validation failures (except invalid states which are expected)
+            _LOGGER.debug(
+                "Validation failed for %s: %s (value=%s)",
+                entity_id,
+                result.reason,
+                result.original_value,
+            )
+            self.validation_failed += 1
+
+        # Validate numeric attributes
+        if state.attributes:
+            for attr in NUMERIC_ATTRIBUTES:
+                if attr not in state.attributes:
+                    continue
+
+                attr_result = self.data_validator.validate_attribute(
+                    state=state,
+                    attribute=attr,
+                    entity_id=f"{entity_id}.{attr}",
+                    device_class=device_class,
+                )
+
+                if attr_result.result == ValidationResult.VALID:
+                    validated_values[attr] = attr_result.value
+                elif attr_result.result != ValidationResult.INVALID_STATE:
+                    _LOGGER.debug(
+                        "Validation failed for %s.%s: %s",
+                        entity_id,
+                        attr,
+                        attr_result.reason,
+                    )
+
+        return validated_values
 
     async def _async_ensure_attribute_signal(
         self,

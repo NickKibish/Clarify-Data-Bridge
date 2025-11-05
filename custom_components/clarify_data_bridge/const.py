@@ -23,6 +23,13 @@ DEFAULT_PUBLISHING_STRATEGY = "manual"  # Don't auto-publish by default
 DEFAULT_AUTO_PUBLISH = False
 DEFAULT_VISIBLE = True
 
+# Buffering strategy options
+DEFAULT_BUFFER_STRATEGY = "hybrid"  # Options: time, size, priority, hybrid, adaptive
+DEFAULT_PRIORITY_IMMEDIATE = True  # Flush high-priority data immediately
+DEFAULT_STALE_THRESHOLD_MINUTES = 5  # Data older than this is considered stale
+DEFAULT_VALIDATE_RANGES = True  # Validate numeric ranges based on device class
+DEFAULT_TRACK_CHANGES_ONLY = False  # Track all data or only changes
+
 # Configuration options
 CONF_BATCH_INTERVAL = "batch_interval"
 CONF_MAX_BATCH_SIZE = "max_batch_size"
@@ -36,6 +43,13 @@ CONF_EXCLUDE_PATTERNS = "exclude_patterns"
 CONF_MIN_PRIORITY = "min_priority"
 CONF_AUTO_DISCOVER = "auto_discover"
 CONF_PUBLISH_ON_DISCOVERY = "publish_on_discovery"
+
+# Buffering configuration
+CONF_BUFFER_STRATEGY = "buffer_strategy"
+CONF_PRIORITY_IMMEDIATE = "priority_immediate"
+CONF_STALE_THRESHOLD = "stale_threshold_minutes"
+CONF_VALIDATE_RANGES = "validate_ranges"
+CONF_TRACK_CHANGES_ONLY = "track_changes_only"
 
 # Publishing options
 CONF_PUBLISHING_STRATEGY = "publishing_strategy"
