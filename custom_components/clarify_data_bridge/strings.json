@@ -115,7 +115,12 @@
     "step": {
       "init": {
         "title": "Configure Clarify Data Bridge",
-        "description": "Choose what you want to configure"
+        "description": "Choose what you want to configure",
+        "menu_options": {
+          "batch_settings": "Batch Processing Settings",
+          "entity_filters": "Entity Filtering",
+          "advanced_filters": "Advanced Filters"
+        }
       },
       "batch_settings": {
         "title": "Batch Processing Settings",
@@ -164,13 +169,6 @@
       "select_entities": {
         "title": "Select Entities",
         "description": "Select entities from: {domains}\n\n{entity_count} entities available"
-      }
-    },
-    "menu": {
-      "init": {
-        "batch_settings": "Batch Processing Settings",
-        "entity_filters": "Entity Filtering",
-        "advanced_filters": "Advanced Filters"
       }
     }
   },
