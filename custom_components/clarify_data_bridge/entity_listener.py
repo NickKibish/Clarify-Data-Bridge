@@ -152,12 +152,21 @@ class ClarifyEntityListener:
             _LOGGER.info("Using user-selected entities: %d specified", len(self.selected_entities))
             for entity_id in self.selected_entities:
                 state = self.hass.states.get(entity_id)
-                if state:
-                    metadata = await self.entity_selector.async_get_entity_metadata(entity_id, state)
-                    if metadata:
-                        self._discovered_entities[entity_id] = metadata
+                # Always get metadata, even if state is None
+                # Entity selector will fall back to entity registry for missing states
+                metadata = await self.entity_selector.async_get_entity_metadata(entity_id, state)
+                if metadata:
+                    self._discovered_entities[entity_id] = metadata
+                    if not state:
+                        _LOGGER.info(
+                            "Selected entity %s added with placeholder metadata (state pending)",
+                            entity_id
+                        )
                 else:
-                    _LOGGER.warning("Selected entity %s not found", entity_id)
+                    _LOGGER.warning(
+                        "Selected entity %s could not be added (not in entity registry)",
+                        entity_id
+                    )
         else:
             # Use automatic discovery
             discovered = await self.entity_selector.async_discover_entities(

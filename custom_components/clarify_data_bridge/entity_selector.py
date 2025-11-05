@@ -301,12 +301,17 @@ class EntitySelector:
             state: Optional state object (fetched if not provided).
 
         Returns:
-            EntityMetadata object or None if entity not found/invalid.
+            EntityMetadata object with full or minimal metadata.
+            Returns minimal metadata from entity registry if state unavailable.
         """
+        # Try to get state if not provided
         if state is None:
             state = self.hass.states.get(entity_id)
-            if not state:
-                return None
+
+        # If state is unavailable, fall back to entity registry
+        if not state:
+            _LOGGER.debug("State unavailable for %s, using entity registry fallback", entity_id)
+            return await self._async_build_metadata_from_registry(entity_id)
 
         domain = entity_id.split(".")[0]
         object_id = entity_id.split(".", 1)[1]
@@ -388,6 +393,93 @@ class EntitySelector:
             numeric_attributes=numeric_attributes if numeric_attributes else None,
             icon=icon,
             entity_category=entity_category,
+        )
+
+    async def _async_build_metadata_from_registry(
+        self,
+        entity_id: str,
+    ) -> EntityMetadata:
+        """Build minimal EntityMetadata from entity registry when state is unavailable.
+
+        Args:
+            entity_id: Entity ID to build metadata for.
+
+        Returns:
+            EntityMetadata with basic information from registry.
+        """
+        domain = entity_id.split(".")[0]
+        object_id = entity_id.split(".", 1)[1]
+
+        # Start with minimal defaults
+        friendly_name = entity_id
+        device_class = None
+        device_id = None
+        device_name = None
+        device_manufacturer = None
+        device_model = None
+        area_id = None
+        area_name = None
+
+        # Try to get information from entity registry
+        if self._entity_registry:
+            entity_entry = self._entity_registry.async_get(entity_id)
+            if entity_entry:
+                # Use original_name or entity_id as friendly name
+                friendly_name = entity_entry.original_name or entity_entry.name or entity_id
+                device_id = entity_entry.device_id
+                area_id = entity_entry.area_id
+                device_class = entity_entry.device_class or entity_entry.original_device_class
+
+                # Get device info
+                if device_id and self._device_registry:
+                    device_entry = self._device_registry.async_get(device_id)
+                    if device_entry:
+                        device_name = device_entry.name_by_user or device_entry.name
+                        device_manufacturer = device_entry.manufacturer
+                        device_model = device_entry.model
+
+                        # Use device area if entity doesn't have one
+                        if not area_id:
+                            area_id = device_entry.area_id
+
+                # Get area name
+                if area_id and self._area_registry:
+                    area_entry = self._area_registry.async_get_area(area_id)
+                    if area_entry:
+                        area_name = area_entry.name
+
+        # Build description
+        description = f"Home Assistant {domain} entity (state pending)"
+
+        # Create minimal metadata - assume entity might have numeric data
+        # Category will be refined when state becomes available
+        category = self._classify_entity(domain, device_class, False, None)
+
+        _LOGGER.info(
+            "Created placeholder metadata for %s (state unavailable at startup)",
+            entity_id
+        )
+
+        return EntityMetadata(
+            entity_id=entity_id,
+            domain=domain,
+            object_id=object_id,
+            friendly_name=friendly_name,
+            description=description,
+            device_class=device_class,
+            category=category,
+            unit_of_measurement=None,
+            state_class=None,
+            device_id=device_id,
+            device_name=device_name,
+            device_manufacturer=device_manufacturer,
+            device_model=device_model,
+            area_id=area_id,
+            area_name=area_name,
+            has_numeric_state=False,  # Unknown until state arrives
+            numeric_attributes=None,  # Unknown until state arrives
+            icon=None,
+            entity_category=None,
         )
 
     def _is_numeric(self, value: Any) -> bool:
