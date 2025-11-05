@@ -1,0 +1,126 @@
+publish_entity:
+  name: Publish Entity to Clarify
+  description: Publish a Home Assistant entity as a Clarify item (makes it visible in Clarify organization).
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The entity ID to publish (e.g., sensor.temperature).
+      required: true
+      example: "sensor.living_room_temperature"
+      selector:
+        entity: {}
+    visible:
+      name: Visible
+      description: Whether the item should be visible in Clarify.
+      required: false
+      default: true
+      selector:
+        boolean: {}
+    labels:
+      name: Additional Labels
+      description: Additional labels to add to the item (as JSON).
+      required: false
+      example: '{"location": ["living_room"], "floor": ["1"]}'
+      selector:
+        object: {}
+
+publish_entities:
+  name: Publish Multiple Entities
+  description: Publish multiple Home Assistant entities as Clarify items.
+  fields:
+    entity_ids:
+      name: Entity IDs
+      description: List of entity IDs to publish.
+      required: true
+      example: "sensor.temperature, sensor.humidity"
+      selector:
+        entity:
+          multiple: true
+    visible:
+      name: Visible
+      description: Whether the items should be visible in Clarify.
+      required: false
+      default: true
+      selector:
+        boolean: {}
+    labels:
+      name: Additional Labels
+      description: Additional labels to add to all items (as JSON).
+      required: false
+      example: '{"location": ["living_room"]}'
+      selector:
+        object: {}
+
+publish_all_tracked:
+  name: Publish All Tracked Entities
+  description: Publish all currently tracked entities as Clarify items.
+  fields:
+    visible:
+      name: Visible
+      description: Whether the items should be visible in Clarify.
+      required: false
+      default: true
+      selector:
+        boolean: {}
+    labels:
+      name: Additional Labels
+      description: Additional labels to add to all items (as JSON).
+      required: false
+      example: '{"batch": ["manual_publish"]}'
+      selector:
+        object: {}
+
+update_item_visibility:
+  name: Update Item Visibility
+  description: Update the visibility of a published Clarify item.
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The entity ID whose item visibility to update.
+      required: true
+      example: "sensor.living_room_temperature"
+      selector:
+        entity: {}
+    visible:
+      name: Visible
+      description: New visibility setting.
+      required: true
+      selector:
+        boolean: {}
+
+publish_domain:
+  name: Publish Domain
+  description: Publish all entities from a specific domain (e.g., all sensors).
+  fields:
+    domain:
+      name: Domain
+      description: The domain to publish (e.g., sensor, binary_sensor, light).
+      required: true
+      example: "sensor"
+      selector:
+        select:
+          options:
+            - "sensor"
+            - "binary_sensor"
+            - "light"
+            - "switch"
+            - "climate"
+            - "cover"
+            - "fan"
+            - "lock"
+            - "media_player"
+            - "weather"
+    visible:
+      name: Visible
+      description: Whether the items should be visible in Clarify.
+      required: false
+      default: true
+      selector:
+        boolean: {}
+    labels:
+      name: Additional Labels
+      description: Additional labels to add to all items (as JSON).
+      required: false
+      example: '{"domain_batch": ["sensor"]}'
+      selector:
+        object: {}

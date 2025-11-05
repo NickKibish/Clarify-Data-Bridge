@@ -3,20 +3,42 @@
     "step": {
       "user": {
         "title": "Connect to Clarify.io",
-        "description": "Enter your Clarify API credentials. You can get these from your Clarify dashboard.",
+        "description": "Enter your Clarify OAuth 2.0 credentials. You can get these from your Clarify integration credentials file.",
         "data": {
-          "api_key": "API Key",
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
           "integration_id": "Integration ID"
+        },
+        "data_description": {
+          "client_id": "OAuth 2.0 Client ID from your Clarify credentials file",
+          "client_secret": "OAuth 2.0 Client Secret from your Clarify credentials file",
+          "integration_id": "Your Clarify integration identifier"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to Clarify API",
-      "invalid_auth": "Invalid API credentials",
-      "unknown": "Unexpected error occurred"
+      "cannot_connect": "Failed to connect to Clarify API. Please check your network connection and try again.",
+      "invalid_auth": "Invalid OAuth 2.0 credentials. Please verify your Client ID and Client Secret.",
+      "unknown": "Unexpected error occurred. Please check the logs for more details."
     },
     "abort": {
-      "already_configured": "Integration is already configured"
+      "already_configured": "This integration ID is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Clarify Data Bridge",
+        "description": "Adjust batch processing settings for data transmission to Clarify.",
+        "data": {
+          "batch_interval": "Batch Interval (seconds)",
+          "max_batch_size": "Maximum Batch Size"
+        },
+        "data_description": {
+          "batch_interval": "How often to send batched data to Clarify (60-3600 seconds)",
+          "max_batch_size": "Maximum number of data points to accumulate before sending (10-1000)"
+        }
+      }
     }
   }
 }
