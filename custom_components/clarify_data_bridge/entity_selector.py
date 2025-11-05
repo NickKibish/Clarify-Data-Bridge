@@ -25,14 +25,6 @@ from homeassistant.const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class DataPriority(Enum):
-    """Priority levels for entity data collection."""
-    HIGH = 1      # Critical time-series data (energy, temperature, etc.)
-    MEDIUM = 2    # Useful metrics (battery, brightness, etc.)
-    LOW = 3       # Less critical data (binary states, etc.)
-    EXCLUDED = 4  # Not suitable for time-series collection
-
-
 class EntityCategory(Enum):
     """Categories of entities based on data type."""
     NUMERIC_SENSOR = "numeric_sensor"           # Pure numeric sensors
@@ -61,7 +53,6 @@ class EntityMetadata:
     # Classification
     device_class: str | None = None
     category: EntityCategory = EntityCategory.OTHER
-    priority: DataPriority = DataPriority.LOW
 
     # Measurement info
     unit_of_measurement: str | None = None
@@ -119,9 +110,6 @@ class EntityMetadata:
         if self.category:
             labels["category"] = [self.category.value]
 
-        if self.priority:
-            labels["priority"] = [self.priority.name.lower()]
-
         return labels
 
 
@@ -129,35 +117,10 @@ class EntitySelector:
     """Select and classify Home Assistant entities for Clarify data collection.
 
     This class provides intelligent entity discovery with:
-    - Device class-based prioritization
     - Comprehensive metadata extraction
     - Flexible filtering options
     - Entity categorization
     """
-
-    # High priority device classes (most valuable time-series data)
-    HIGH_PRIORITY_DEVICE_CLASSES = {
-        # Energy & Power
-        "energy", "power", "apparent_power", "reactive_power", "power_factor",
-        "voltage", "current", "energy_storage",
-
-        # Environmental
-        "temperature", "humidity", "pressure", "atmospheric_pressure",
-        "pm25", "pm10", "carbon_dioxide", "carbon_monoxide",
-        "aqi", "gas", "nitrogen_dioxide", "nitrogen_monoxide",
-        "ozone", "sulphur_dioxide", "volatile_organic_compounds",
-
-        # Resource monitoring
-        "energy_storage", "battery", "data_rate", "data_size",
-        "frequency", "monetary", "weight",
-    }
-
-    # Medium priority device classes
-    MEDIUM_PRIORITY_DEVICE_CLASSES = {
-        "illuminance", "distance", "speed", "duration",
-        "brightness", "volume", "sound_pressure",
-        "signal_strength", "timestamp",
-    }
 
     # Device classes suitable for binary conversion (0/1)
     BINARY_DEVICE_CLASSES = {
@@ -225,7 +188,6 @@ class EntitySelector:
         exclude_device_classes: list[str] | None = None,
         include_entity_ids: list[str] | None = None,
         exclude_entity_ids: list[str] | None = None,
-        min_priority: DataPriority = DataPriority.LOW,
         include_patterns: list[str] | None = None,
         exclude_patterns: list[str] | None = None,
     ) -> list[EntityMetadata]:
@@ -238,7 +200,6 @@ class EntitySelector:
             exclude_device_classes: List of device classes to exclude.
             include_entity_ids: Specific entity IDs to include.
             exclude_entity_ids: Specific entity IDs to exclude.
-            min_priority: Minimum priority level (HIGH, MEDIUM, LOW).
             include_patterns: Regex patterns for entity IDs to include.
             exclude_patterns: Regex patterns for entity IDs to exclude.
 
@@ -256,14 +217,13 @@ class EntitySelector:
         include_regex = [re.compile(p) for p in (include_patterns or [])]
         exclude_regex = [re.compile(p) for p in (exclude_patterns or [])]
 
-        _LOGGER.info("Starting entity discovery with filters: domains=%s, min_priority=%s",
-                    include_domains, min_priority.name)
+        _LOGGER.info("Starting entity discovery with filters: domains=%s",
+                    include_domains)
 
         total_scanned = 0
         filtered_counts = {
             "domain": 0,
             "device_class": 0,
-            "priority": 0,
             "no_numeric": 0,
             "passed": 0,
         }
@@ -312,15 +272,6 @@ class EntitySelector:
                 filtered_counts["device_class"] += 1
                 continue
 
-            # Check priority filter
-            if metadata.priority.value > min_priority.value:
-                filtered_counts["priority"] += 1
-                if "humidity" in entity_id:
-                    _LOGGER.info("Filtered %s by priority: entity_priority=%s (value=%d) > min=%s (value=%d)",
-                                entity_id, metadata.priority.name, metadata.priority.value,
-                                min_priority.name, min_priority.value)
-                continue
-
             # Check if entity has trackable data
             if not (metadata.has_numeric_state or metadata.numeric_attributes):
                 filtered_counts["no_numeric"] += 1
@@ -333,8 +284,8 @@ class EntitySelector:
                     len(discovered_entities), total_scanned)
         _LOGGER.info("Filter breakdown: %s", filtered_counts)
 
-        # Sort by priority (high first), then by entity_id
-        discovered_entities.sort(key=lambda x: (x.priority.value, x.entity_id))
+        # Sort by entity_id for consistent ordering
+        discovered_entities.sort(key=lambda x: x.entity_id)
 
         return discovered_entities
 
@@ -374,9 +325,8 @@ class EntitySelector:
         # Extract numeric attributes
         numeric_attributes = self._extract_numeric_attribute_names(state)
 
-        # Determine category and priority
+        # Determine category
         category = self._classify_entity(domain, device_class, has_numeric_state, numeric_attributes)
-        priority = self._determine_priority(domain, device_class, category)
 
         # Get device and area information
         device_id = None
@@ -426,7 +376,6 @@ class EntitySelector:
             description=description,
             device_class=device_class,
             category=category,
-            priority=priority,
             unit_of_measurement=unit,
             state_class=state_class,
             device_id=device_id,
@@ -525,48 +474,6 @@ class EntitySelector:
 
         return EntityCategory.OTHER
 
-    def _determine_priority(
-        self,
-        domain: str,
-        device_class: str | None,
-        category: EntityCategory,
-    ) -> DataPriority:
-        """Determine priority level for an entity.
-
-        Args:
-            domain: Entity domain.
-            device_class: Device class.
-            category: Entity category.
-
-        Returns:
-            DataPriority for the entity.
-        """
-        # High priority device classes
-        if device_class in self.HIGH_PRIORITY_DEVICE_CLASSES:
-            return DataPriority.HIGH
-
-        # Medium priority device classes
-        if device_class in self.MEDIUM_PRIORITY_DEVICE_CLASSES:
-            return DataPriority.MEDIUM
-
-        # Category-based priority
-        if category in (EntityCategory.POWER_DEVICE, EntityCategory.ENVIRONMENTAL,
-                       EntityCategory.CLIMATE_DEVICE):
-            return DataPriority.HIGH
-
-        if category in (EntityCategory.NUMERIC_SENSOR, EntityCategory.MULTI_VALUE_SENSOR):
-            return DataPriority.MEDIUM
-
-        # Binary sensors are low priority (but still trackable)
-        if category == EntityCategory.BINARY_SENSOR:
-            return DataPriority.LOW
-
-        # Control devices are low priority
-        if category == EntityCategory.CONTROL_DEVICE:
-            return DataPriority.LOW
-
-        return DataPriority.LOW
-
     def extract_numeric_values(
         self,
         state: State,
@@ -611,22 +518,6 @@ class EntitySelector:
                         pass
 
         return values
-
-    def filter_entities_by_priority(
-        self,
-        entities: list[EntityMetadata],
-        min_priority: DataPriority = DataPriority.LOW,
-    ) -> list[EntityMetadata]:
-        """Filter entities by minimum priority level.
-
-        Args:
-            entities: List of entity metadata.
-            min_priority: Minimum priority level.
-
-        Returns:
-            Filtered list of entities.
-        """
-        return [e for e in entities if e.priority.value <= min_priority.value]
 
     def group_entities_by_category(
         self,

@@ -24,8 +24,7 @@ DEFAULT_AUTO_PUBLISH = False
 DEFAULT_VISIBLE = True
 
 # Buffering strategy options
-DEFAULT_BUFFER_STRATEGY = "hybrid"  # Options: time, size, priority, hybrid, adaptive
-DEFAULT_PRIORITY_IMMEDIATE = True  # Flush high-priority data immediately
+DEFAULT_BUFFER_STRATEGY = "hybrid"  # Options: time, size, hybrid, adaptive
 DEFAULT_STALE_THRESHOLD_MINUTES = 5  # Data older than this is considered stale
 DEFAULT_VALIDATE_RANGES = True  # Validate numeric ranges based on device class
 DEFAULT_TRACK_CHANGES_ONLY = False  # Track all data or only changes
@@ -47,13 +46,12 @@ CONF_INCLUDE_DEVICE_CLASSES = "include_device_classes"
 CONF_EXCLUDE_DEVICE_CLASSES = "exclude_device_classes"
 CONF_INCLUDE_PATTERNS = "include_patterns"
 CONF_EXCLUDE_PATTERNS = "exclude_patterns"
-CONF_MIN_PRIORITY = "min_priority"
+CONF_SELECTED_ENTITIES = "selected_entities"
 CONF_AUTO_DISCOVER = "auto_discover"
 CONF_PUBLISH_ON_DISCOVERY = "publish_on_discovery"
 
 # Buffering configuration
 CONF_BUFFER_STRATEGY = "buffer_strategy"
-CONF_PRIORITY_IMMEDIATE = "priority_immediate"
 CONF_STALE_THRESHOLD = "stale_threshold_minutes"
 CONF_VALIDATE_RANGES = "validate_ranges"
 CONF_TRACK_CHANGES_ONLY = "track_changes_only"
@@ -94,7 +92,6 @@ CONF_PUBLISHING_STRATEGY = "publishing_strategy"
 CONF_PUBLISHING_RULES = "publishing_rules"
 CONF_AUTO_PUBLISH = "auto_publish"
 CONF_DEFAULT_VISIBLE = "default_visible"
-CONF_PUBLISH_PRIORITIES = "publish_priorities"
 CONF_PUBLISH_DEVICE_CLASSES = "publish_device_classes"
 CONF_PUBLISH_CATEGORIES = "publish_categories"
 
@@ -121,7 +118,6 @@ SERVICE_PUBLISH_ENTITIES = "publish_entities"
 SERVICE_PUBLISH_ALL_TRACKED = "publish_all_tracked"
 SERVICE_UPDATE_ITEM_VISIBILITY = "update_item_visibility"
 SERVICE_PUBLISH_DOMAIN = "publish_domain"
-SERVICE_PUBLISH_BY_PRIORITY = "publish_by_priority"
 SERVICE_PUBLISH_BY_DEVICE_CLASS = "publish_by_device_class"
 SERVICE_UNPUBLISH_ENTITY = "unpublish_entity"
 SERVICE_SYNC_PUBLISHING = "sync_publishing"
@@ -132,7 +128,6 @@ ATTR_ENTITY_IDS = "entity_ids"
 ATTR_VISIBLE = "visible"
 ATTR_LABELS = "labels"
 ATTR_DOMAIN = "domain"
-ATTR_PRIORITY = "priority"
 ATTR_DEVICE_CLASS = "device_class"
 ATTR_DEVICE_CLASSES = "device_classes"
 ATTR_STRATEGY = "strategy"
@@ -195,55 +190,6 @@ NUMERIC_ATTRIBUTES = [
     "position",
     "tilt_position",
 ]
-
-# High priority device classes for time-series data
-HIGH_PRIORITY_DEVICE_CLASSES = {
-    # Energy & Power
-    "energy",
-    "power",
-    "apparent_power",
-    "reactive_power",
-    "power_factor",
-    "voltage",
-    "current",
-    "energy_storage",
-    # Environmental
-    "temperature",
-    "humidity",
-    "pressure",
-    "atmospheric_pressure",
-    "pm25",
-    "pm10",
-    "carbon_dioxide",
-    "carbon_monoxide",
-    "aqi",
-    "gas",
-    "nitrogen_dioxide",
-    "nitrogen_monoxide",
-    "ozone",
-    "sulphur_dioxide",
-    "volatile_organic_compounds",
-    # Resource monitoring
-    "battery",
-    "data_rate",
-    "data_size",
-    "frequency",
-    "monetary",
-    "weight",
-}
-
-# Medium priority device classes
-MEDIUM_PRIORITY_DEVICE_CLASSES = {
-    "illuminance",
-    "distance",
-    "speed",
-    "duration",
-    "brightness",
-    "volume",
-    "sound_pressure",
-    "signal_strength",
-    "timestamp",
-}
 
 # Device classes for binary sensors (convertible to 0/1)
 BINARY_DEVICE_CLASSES = {

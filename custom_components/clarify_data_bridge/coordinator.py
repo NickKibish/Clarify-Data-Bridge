@@ -20,7 +20,6 @@ from .buffer_strategy import (
     BufferEntry,
     FlushTrigger,
 )
-from .entity_selector import DataPriority
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,7 +33,6 @@ class ClarifyDataCoordinator:
     Supports multiple buffering strategies:
     - Time-based: Flush every X seconds
     - Size-based: Flush when buffer reaches Y entries
-    - Priority-based: Immediate flush for high-priority data
     - Hybrid: Combination of time and size
     - Adaptive: Adjust based on data rate
     """
@@ -46,7 +44,6 @@ class ClarifyDataCoordinator:
         batch_interval: int = DEFAULT_BATCH_INTERVAL,
         max_batch_size: int = DEFAULT_MAX_BATCH_SIZE,
         buffer_strategy: BufferStrategy = BufferStrategy.HYBRID,
-        priority_immediate: bool = True,
     ) -> None:
         """Initialize the data coordinator.
 
@@ -56,7 +53,6 @@ class ClarifyDataCoordinator:
             batch_interval: Interval in seconds between batch sends.
             max_batch_size: Maximum number of data points per batch.
             buffer_strategy: Buffering strategy to use.
-            priority_immediate: Whether to flush high-priority data immediately.
         """
         self.hass = hass
         self.client = client
@@ -68,16 +64,11 @@ class ClarifyDataCoordinator:
             strategy=buffer_strategy,
             time_interval=batch_interval,
             size_limit=max_batch_size,
-            priority_immediate=priority_immediate,
-            priority_threshold=DataPriority.HIGH,
         )
 
         # Legacy buffer for backward compatibility (simple dict backup)
         self._data_buffer: dict[str, list[tuple[datetime, float]]] = defaultdict(list)
         self._buffer_lock = asyncio.Lock()
-
-        # Track entity priorities for buffer strategy
-        self._entity_priorities: dict[str, DataPriority] = {}
 
         # Track last send time for diagnostics
         self.last_send_time: datetime | None = None
@@ -90,11 +81,10 @@ class ClarifyDataCoordinator:
         self._check_timer = None
 
         _LOGGER.info(
-            "Initialized ClarifyDataCoordinator: strategy=%s, interval=%ds, max_size=%d, priority_immediate=%s",
+            "Initialized ClarifyDataCoordinator: strategy=%s, interval=%ds, max_size=%d",
             buffer_strategy.value,
             batch_interval,
             max_batch_size,
-            priority_immediate,
         )
 
     async def start(self) -> None:
@@ -113,7 +103,6 @@ class ClarifyDataCoordinator:
         )
 
         # Schedule more frequent buffer checks (every 10 seconds)
-        # For priority-based immediate flushing
         self._check_timer = async_track_time_interval(
             self.hass,
             self._async_check_buffer,
@@ -136,26 +125,12 @@ class ClarifyDataCoordinator:
         # Send any remaining data
         await self._async_flush_buffer(FlushTrigger.SHUTDOWN)
 
-    def register_entity_priority(
-        self,
-        entity_id: str,
-        priority: DataPriority,
-    ) -> None:
-        """Register an entity's priority level.
-
-        Args:
-            entity_id: Entity ID.
-            priority: Priority level.
-        """
-        self._entity_priorities[entity_id] = priority
-
     async def add_data_point(
         self,
         input_id: str,
         value: float,
         timestamp: datetime | None = None,
         entity_id: str | None = None,
-        priority: DataPriority | None = None,
         device_class: str | None = None,
     ) -> None:
         """Add a data point to the batch buffer.
@@ -164,25 +139,17 @@ class ClarifyDataCoordinator:
             input_id: Unique input ID for the signal.
             value: Numeric value to send.
             timestamp: Timestamp for the data point (defaults to now).
-            entity_id: Entity ID (for priority lookup).
-            priority: Priority level (optional, looked up if not provided).
+            entity_id: Entity ID (for logging/metrics).
             device_class: Device class (for logging/metrics).
         """
         if timestamp is None:
             timestamp = dt_util.utcnow()
-
-        # Determine priority
-        if priority is None and entity_id:
-            priority = self._entity_priorities.get(entity_id, DataPriority.LOW)
-        elif priority is None:
-            priority = DataPriority.LOW
 
         # Create buffer entry
         entry = BufferEntry(
             input_id=input_id,
             value=value,
             timestamp=timestamp,
-            priority=priority,
             entity_id=entity_id,
             device_class=device_class,
         )
@@ -196,14 +163,10 @@ class ClarifyDataCoordinator:
 
             buffer_stats = self.buffer_manager.get_buffer_sizes()
             _LOGGER.info(
-                "✓ Added data point to buffer: %s=%.2f (priority=%s, total_buffer=%d, high=%d, med=%d, low=%d)",
+                "✓ Added data point to buffer: %s=%.2f (total_buffer=%d)",
                 input_id,
                 value,
-                priority.name,
                 buffer_stats["total"],
-                buffer_stats.get("high", 0),
-                buffer_stats.get("medium", 0),
-                buffer_stats.get("low", 0),
             )
 
             # Check if immediate flush is needed
@@ -247,11 +210,8 @@ class ClarifyDataCoordinator:
 
         # Get current buffer stats before flush
         buffer_stats = self.buffer_manager.get_buffer_sizes()
-        _LOGGER.info("Buffer state before flush: total=%d, high=%d, med=%d, low=%d",
-                    buffer_stats.get("total", 0),
-                    buffer_stats.get("high", 0),
-                    buffer_stats.get("medium", 0),
-                    buffer_stats.get("low", 0))
+        _LOGGER.info("Buffer state before flush: total=%d",
+                    buffer_stats.get("total", 0))
 
         # Get data from buffer manager
         buffer_data = self.buffer_manager.get_flush_data(trigger)

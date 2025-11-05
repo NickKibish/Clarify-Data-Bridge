@@ -15,7 +15,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .coordinator import ClarifyDataCoordinator
 from .signal_manager import ClarifySignalManager
-from .entity_selector import EntitySelector, EntityMetadata, DataPriority
+from .entity_selector import EntitySelector, EntityMetadata
 from .const import SUPPORTED_DOMAINS, NUMERIC_ATTRIBUTES
 from .data_validator import DataValidator, ValidationResult
 
@@ -41,7 +41,7 @@ class ClarifyEntityListener:
         exclude_device_classes: list[str] | None = None,
         include_patterns: list[str] | None = None,
         exclude_patterns: list[str] | None = None,
-        min_priority: DataPriority = DataPriority.LOW,
+        selected_entities: list[str] | None = None,
     ) -> None:
         """Initialize the entity listener.
 
@@ -56,7 +56,7 @@ class ClarifyEntityListener:
             exclude_device_classes: List of device classes to exclude.
             include_patterns: Regex patterns for entity IDs to include.
             exclude_patterns: Regex patterns for entity IDs to exclude.
-            min_priority: Minimum priority level for entities.
+            selected_entities: Specific entity IDs to track (if None, discover automatically).
         """
         self.hass = hass
         self.coordinator = coordinator
@@ -70,7 +70,7 @@ class ClarifyEntityListener:
         self.exclude_device_classes = exclude_device_classes
         self.include_patterns = include_patterns
         self.exclude_patterns = exclude_patterns
-        self.min_priority = min_priority
+        self.selected_entities = set(selected_entities or [])
 
         # Track discovered entities
         self._discovered_entities: dict[str, EntityMetadata] = {}
@@ -91,18 +91,18 @@ class ClarifyEntityListener:
         self.validation_failed = 0
 
         _LOGGER.debug(
-            "Initialized ClarifyEntityListener with domains: %s, excluded: %d entities, min_priority: %s",
+            "Initialized ClarifyEntityListener with domains: %s, excluded: %d entities, selected: %d entities",
             self.include_domains,
             len(self.exclude_entities),
-            min_priority.name if min_priority else "NONE",
+            len(self.selected_entities),
         )
 
     async def async_start(self) -> None:
         """Start listening to state changes with intelligent entity discovery."""
         _LOGGER.info("Starting entity listener for domains: %s", self.include_domains)
         _LOGGER.debug(
-            "Entity listener config: min_priority=%s, include_device_classes=%s, exclude_device_classes=%s",
-            self.min_priority.name,
+            "Entity listener config: selected_entities=%d, include_device_classes=%s, exclude_device_classes=%s",
+            len(self.selected_entities),
             self.include_device_classes,
             self.exclude_device_classes,
         )
@@ -130,9 +130,6 @@ class ClarifyEntityListener:
         if self.entity_selector:
             self._log_entity_discovery_summary()
 
-        # Register entity priorities with coordinator
-        self._register_entity_priorities()
-
         # Create signals for all entities
         await self._async_create_signals_for_entities(entity_ids)
 
@@ -150,26 +147,37 @@ class ClarifyEntityListener:
         """Discover entities using EntitySelector with advanced filtering."""
         _LOGGER.info("Using advanced entity discovery with EntitySelector")
 
-        discovered = await self.entity_selector.async_discover_entities(
-            include_domains=self.include_domains,
-            exclude_domains=None,
-            include_device_classes=self.include_device_classes,
-            exclude_device_classes=self.exclude_device_classes,
-            include_entity_ids=None,
-            exclude_entity_ids=list(self.exclude_entities),
-            min_priority=self.min_priority,
-            include_patterns=self.include_patterns,
-            exclude_patterns=self.exclude_patterns,
-        )
+        # If selected_entities is specified, use it directly
+        if self.selected_entities:
+            _LOGGER.info("Using user-selected entities: %d specified", len(self.selected_entities))
+            for entity_id in self.selected_entities:
+                state = self.hass.states.get(entity_id)
+                if state:
+                    metadata = await self.entity_selector.async_get_entity_metadata(entity_id, state)
+                    if metadata:
+                        self._discovered_entities[entity_id] = metadata
+                else:
+                    _LOGGER.warning("Selected entity %s not found", entity_id)
+        else:
+            # Use automatic discovery
+            discovered = await self.entity_selector.async_discover_entities(
+                include_domains=self.include_domains,
+                exclude_domains=None,
+                include_device_classes=self.include_device_classes,
+                exclude_device_classes=self.exclude_device_classes,
+                include_entity_ids=None,
+                exclude_entity_ids=list(self.exclude_entities),
+                include_patterns=self.include_patterns,
+                exclude_patterns=self.exclude_patterns,
+            )
 
-        # Store discovered entities
-        for metadata in discovered:
-            self._discovered_entities[metadata.entity_id] = metadata
+            # Store discovered entities
+            for metadata in discovered:
+                self._discovered_entities[metadata.entity_id] = metadata
 
         _LOGGER.info(
-            "Advanced discovery found %d entities (priority >= %s)",
+            "Advanced discovery found %d entities",
             len(self._discovered_entities),
-            self.min_priority.name,
         )
 
     async def _async_discover_entities_basic(self) -> None:
@@ -196,33 +204,15 @@ class ClarifyEntityListener:
         """Log a summary of discovered entities."""
         from collections import Counter
 
-        # Count by priority
-        priority_counts = Counter(m.priority.name for m in self._discovered_entities.values())
-
         # Count by category
         category_counts = Counter(m.category.value for m in self._discovered_entities.values())
 
+        # Count by domain
+        domain_counts = Counter(m.domain for m in self._discovered_entities.values())
+
         _LOGGER.info("Entity discovery summary:")
-        _LOGGER.info("  By priority: %s", dict(priority_counts))
+        _LOGGER.info("  By domain: %s", dict(domain_counts))
         _LOGGER.info("  By category: %s", dict(category_counts))
-
-        # Log high priority entities
-        high_priority = [
-            e.entity_id for e in self._discovered_entities.values()
-            if e.priority == DataPriority.HIGH
-        ]
-        if high_priority:
-            _LOGGER.info("  High priority entities (%d): %s", len(high_priority), high_priority[:10])
-
-    def _register_entity_priorities(self) -> None:
-        """Register entity priorities with the coordinator for priority-based buffering."""
-        for entity_id, metadata in self._discovered_entities.items():
-            self.coordinator.register_entity_priority(entity_id, metadata.priority)
-
-        _LOGGER.debug(
-            "Registered %d entity priorities with coordinator",
-            len(self._discovered_entities),
-        )
 
     async def async_stop(self) -> None:
         """Stop listening to state changes."""
@@ -364,12 +354,11 @@ class ClarifyEntityListener:
             old_state: Previous state.
         """
         try:
-            # Get entity metadata for priority and device class
+            # Get entity metadata for device class
             metadata = self._discovered_entities.get(entity_id)
-            priority = metadata.priority if metadata else DataPriority.LOW
             device_class = metadata.device_class if metadata else None
 
-            _LOGGER.debug("Processing %s: priority=%s, device_class=%s", entity_id, priority.name, device_class)
+            _LOGGER.debug("Processing %s: device_class=%s", entity_id, device_class)
 
             # Ensure signal exists
             input_id = await self.signal_manager.async_ensure_signal(entity_id, new_state)
@@ -384,7 +373,7 @@ class ClarifyEntityListener:
                 self.events_ignored += 1
                 return
 
-            # Add data points to coordinator with priority
+            # Add data points to coordinator
             timestamp = new_state.last_updated
 
             for suffix, value in values.items():
@@ -398,24 +387,22 @@ class ClarifyEntityListener:
                         entity_id, suffix, new_state, data_input_id
                     )
 
-                # Add data point with priority information
-                _LOGGER.debug("Adding data point: %s = %s (priority=%s, timestamp=%s)", data_input_id, value, priority.name, timestamp)
+                # Add data point
+                _LOGGER.debug("Adding data point: %s = %s (timestamp=%s)", data_input_id, value, timestamp)
                 await self.coordinator.add_data_point(
                     input_id=data_input_id,
                     value=value,
                     timestamp=timestamp,
                     entity_id=entity_id,
-                    priority=priority,
                     device_class=device_class,
                 )
 
             self.events_processed += 1
 
             _LOGGER.info(
-                "✓ Processed state change for %s: %d values added (priority=%s)",
+                "✓ Processed state change for %s: %d values added",
                 entity_id,
                 len(values),
-                priority.name,
             )
 
         except Exception as err:

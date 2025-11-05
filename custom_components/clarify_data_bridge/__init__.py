@@ -20,7 +20,7 @@ from .data_update_coordinator import ClarifyDataUpdateCoordinator
 from .entity_listener import ClarifyEntityListener
 from .signal_manager import ClarifySignalManager
 from .item_manager import ClarifyItemManager
-from .entity_selector import EntitySelector, DataPriority
+from .entity_selector import EntitySelector
 from .historical_sync import HistoricalDataSync
 from .config_schema import ConfigurationManager
 from .performance_tuning import PerformanceManager
@@ -40,7 +40,7 @@ from .const import (
     CONF_EXCLUDE_DEVICE_CLASSES,
     CONF_INCLUDE_PATTERNS,
     CONF_EXCLUDE_PATTERNS,
-    CONF_MIN_PRIORITY,
+    CONF_SELECTED_ENTITIES,
     DEFAULT_BATCH_INTERVAL,
     DEFAULT_MAX_BATCH_SIZE,
     DEFAULT_DATA_UPDATE_INTERVAL,
@@ -132,17 +132,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     exclude_device_classes = entry.data.get(CONF_EXCLUDE_DEVICE_CLASSES)
     include_patterns = entry.data.get(CONF_INCLUDE_PATTERNS)
     exclude_patterns = entry.data.get(CONF_EXCLUDE_PATTERNS)
-    min_priority_str = entry.data.get(CONF_MIN_PRIORITY, "LOW")
+    selected_entities = entry.data.get(CONF_SELECTED_ENTITIES)
 
-    # Parse priority level
-    try:
-        min_priority = DataPriority[min_priority_str.upper()]
-    except (KeyError, AttributeError):
-        min_priority = DataPriority.LOW
-        _LOGGER.warning("Invalid min_priority '%s', using LOW", min_priority_str)
-
-    _LOGGER.info("=== PRIORITY DEBUG: min_priority_str='%s', min_priority=%s (value=%d) ===",
-                 min_priority_str, min_priority.name, min_priority.value)
     _LOGGER.debug("Setting up Clarify Data Bridge integration for: %s", integration_id)
 
     # Initialize Clarify API client with OAuth 2.0 credentials
@@ -201,7 +192,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         exclude_device_classes=exclude_device_classes,
         include_patterns=include_patterns,
         exclude_patterns=exclude_patterns,
-        min_priority=min_priority,
+        selected_entities=selected_entities,
     )
 
     # Initialize item manager
