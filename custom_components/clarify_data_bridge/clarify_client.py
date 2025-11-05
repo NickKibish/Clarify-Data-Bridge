@@ -139,14 +139,33 @@ class ClarifyClient:
             return await self.async_connect()
 
         try:
-            # Attempt a simple operation to verify connection
-            # This will validate the token and connection
-            _LOGGER.debug("Verifying Clarify API connection")
+            # Attempt a simple operation to verify connection and credentials
+            # This will trigger OAuth flow and validate credentials
+            _LOGGER.debug("Verifying Clarify API connection by selecting signals")
+
+            # Try to select signals with limit=1 to minimize data transfer
+            response = self._client.select_signals(skip=0, limit=1)
+
+            # Check if response is valid
+            if not isinstance(response, dict):
+                raise ClarifyConnectionError("Invalid response from Clarify API")
+
+            _LOGGER.info("Successfully verified Clarify API connection")
             return True
 
         except Exception as err:
-            _LOGGER.error("Connection verification failed: %s", err)
-            raise ClarifyConnectionError(f"Connection verification failed: {err}") from err
+            error_msg = str(err).lower()
+
+            # Categorize errors
+            if "auth" in error_msg or "credential" in error_msg or "unauthorized" in error_msg or "401" in error_msg:
+                _LOGGER.error("Authentication verification failed: %s", err)
+                raise ClarifyAuthenticationError(f"Invalid credentials: {err}") from err
+            elif "connect" in error_msg or "network" in error_msg or "timeout" in error_msg:
+                _LOGGER.error("Connection verification failed: %s", err)
+                raise ClarifyConnectionError(f"Cannot connect to Clarify: {err}") from err
+            else:
+                _LOGGER.error("Connection verification failed: %s", err)
+                raise ClarifyConnectionError(f"Connection verification failed: {err}") from err
 
     async def async_insert_data(self, data: dict[str, Any]) -> dict[str, Any]:
         """Insert time-series data into Clarify.

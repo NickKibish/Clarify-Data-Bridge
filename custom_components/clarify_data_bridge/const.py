@@ -16,6 +16,8 @@ CONF_API_KEY = "api_key"
 DEFAULT_UPDATE_INTERVAL = 60  # seconds
 DEFAULT_BATCH_INTERVAL = 300  # 5 minutes - batch data insertion interval
 DEFAULT_MAX_BATCH_SIZE = 100  # Maximum number of data points per batch
+DEFAULT_DATA_UPDATE_INTERVAL = 300  # 5 minutes - data retrieval interval
+DEFAULT_LOOKBACK_HOURS = 24  # Hours of historical data to retrieve
 DEFAULT_NAME = "Clarify Data Bridge"
 
 # Configuration options
@@ -36,6 +38,7 @@ ENTRY_DATA_COORDINATOR = "coordinator"
 ENTRY_DATA_LISTENER = "listener"
 ENTRY_DATA_SIGNAL_MANAGER = "signal_manager"
 ENTRY_DATA_ITEM_MANAGER = "item_manager"
+ENTRY_DATA_DATA_UPDATE_COORDINATOR = "data_update_coordinator"
 
 # Service names
 SERVICE_PUBLISH_ENTITY = "publish_entity"

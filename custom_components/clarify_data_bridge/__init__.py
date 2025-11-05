@@ -8,12 +8,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
+from datetime import timedelta
+
 from .clarify_client import (
     ClarifyClient,
     ClarifyAuthenticationError,
     ClarifyConnectionError,
 )
 from .coordinator import ClarifyDataCoordinator
+from .data_update_coordinator import ClarifyDataUpdateCoordinator
 from .entity_listener import ClarifyEntityListener
 from .signal_manager import ClarifySignalManager
 from .item_manager import ClarifyItemManager
@@ -28,12 +31,15 @@ from .const import (
     CONF_EXCLUDE_ENTITIES,
     DEFAULT_BATCH_INTERVAL,
     DEFAULT_MAX_BATCH_SIZE,
+    DEFAULT_DATA_UPDATE_INTERVAL,
+    DEFAULT_LOOKBACK_HOURS,
     SUPPORTED_DOMAINS,
     ENTRY_DATA_CLIENT,
     ENTRY_DATA_COORDINATOR,
     ENTRY_DATA_LISTENER,
     ENTRY_DATA_SIGNAL_MANAGER,
     ENTRY_DATA_ITEM_MANAGER,
+    ENTRY_DATA_DATA_UPDATE_COORDINATOR,
     SERVICE_PUBLISH_ENTITY,
     SERVICE_PUBLISH_ENTITIES,
     SERVICE_PUBLISH_ALL_TRACKED,
@@ -128,6 +134,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         default_visible=True,
     )
 
+    # Initialize data update coordinator (for reading data from Clarify)
+    data_update_coordinator = ClarifyDataUpdateCoordinator(
+        hass=hass,
+        client=client,
+        integration_id=integration_id,
+        update_interval=timedelta(seconds=DEFAULT_DATA_UPDATE_INTERVAL),
+        lookback_hours=DEFAULT_LOOKBACK_HOURS,
+    )
+
     # Store components
     hass.data[DOMAIN][entry.entry_id] = {
         ENTRY_DATA_CLIENT: client,
@@ -135,6 +150,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ENTRY_DATA_SIGNAL_MANAGER: signal_manager,
         ENTRY_DATA_LISTENER: listener,
         ENTRY_DATA_ITEM_MANAGER: item_manager,
+        ENTRY_DATA_DATA_UPDATE_COORDINATOR: data_update_coordinator,
     }
 
     # Register services (only once)
