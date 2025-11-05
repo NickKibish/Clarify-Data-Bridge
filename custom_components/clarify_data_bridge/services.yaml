@@ -124,3 +124,203 @@ publish_domain:
       example: '{"domain_batch": ["sensor"]}'
       selector:
         object: {}
+
+# Phase 7 Services: Advanced Features
+
+sync_historical:
+  name: Sync Historical Data
+  description: Export historical data from Home Assistant recorder to Clarify.io.
+  fields:
+    entity_ids:
+      name: Entity IDs
+      description: List of entity IDs to sync historical data for.
+      required: true
+      example: ["sensor.energy_meter", "sensor.temperature"]
+      selector:
+        entity:
+          multiple: true
+    start_time:
+      name: Start Time
+      description: Start time for historical data (ISO 8601 format or relative like "-7 days").
+      required: true
+      example: "2024-01-01T00:00:00Z"
+      selector:
+        text: {}
+    end_time:
+      name: End Time
+      description: End time for historical data (ISO 8601 format). Defaults to now.
+      required: false
+      example: "2024-01-08T00:00:00Z"
+      selector:
+        text: {}
+    batch_size:
+      name: Batch Size
+      description: Number of data points to send per batch.
+      required: false
+      default: 1000
+      selector:
+        number:
+          min: 100
+          max: 10000
+          step: 100
+    batch_delay:
+      name: Batch Delay
+      description: Delay in seconds between batches.
+      required: false
+      default: 2.0
+      selector:
+        number:
+          min: 0.5
+          max: 60.0
+          step: 0.5
+          unit_of_measurement: "seconds"
+
+flush_buffer:
+  name: Flush Buffer
+  description: Immediately flush all buffered data to Clarify.io.
+  fields: {}
+
+apply_template:
+  name: Apply Configuration Template
+  description: Apply a pre-defined configuration template to selected entities.
+  fields:
+    template_name:
+      name: Template Name
+      description: Name of the configuration template to apply.
+      required: true
+      selector:
+        select:
+          options:
+            - "energy_monitoring"
+            - "environmental_monitoring"
+            - "hvac_monitoring"
+            - "binary_sensor"
+            - "motion_analytics"
+            - "lighting_control"
+            - "comprehensive"
+            - "real_time_critical"
+    entity_ids:
+      name: Entity IDs
+      description: List of entity IDs to apply the template to.
+      required: true
+      example: ["sensor.power_meter", "sensor.energy_total"]
+      selector:
+        entity:
+          multiple: true
+
+set_entity_config:
+  name: Set Entity Configuration
+  description: Configure individual entity settings for data collection and transmission.
+  fields:
+    entity_id:
+      name: Entity ID
+      description: Entity ID to configure.
+      required: true
+      example: "sensor.living_room_temperature"
+      selector:
+        entity: {}
+    transmission_interval:
+      name: Transmission Interval
+      description: How often to transmit data for this entity (seconds).
+      required: false
+      selector:
+        number:
+          min: 10
+          max: 3600
+          step: 10
+          unit_of_measurement: "seconds"
+    aggregation_method:
+      name: Aggregation Method
+      description: Method to aggregate data points before transmission.
+      required: false
+      selector:
+        select:
+          options:
+            - "none"
+            - "average"
+            - "median"
+            - "min"
+            - "max"
+            - "sum"
+            - "first"
+            - "last"
+            - "count"
+            - "change_only"
+    aggregation_window:
+      name: Aggregation Window
+      description: Time window for aggregation (seconds).
+      required: false
+      selector:
+        number:
+          min: 10
+          max: 3600
+          step: 10
+          unit_of_measurement: "seconds"
+    priority:
+      name: Priority
+      description: Priority level for this entity's data.
+      required: false
+      selector:
+        select:
+          options:
+            - "low"
+            - "medium"
+            - "high"
+    buffer_strategy:
+      name: Buffer Strategy
+      description: Buffering strategy for this entity.
+      required: false
+      selector:
+        select:
+          options:
+            - "time"
+            - "size"
+            - "priority"
+            - "hybrid"
+            - "adaptive"
+
+set_performance_profile:
+  name: Set Performance Profile
+  description: Change the performance profile for the integration.
+  fields:
+    profile_name:
+      name: Profile Name
+      description: Name of the performance profile to activate.
+      required: true
+      selector:
+        select:
+          options:
+            - "minimal"
+            - "balanced"
+            - "high_performance"
+            - "real_time"
+
+get_health_report:
+  name: Get Health Report
+  description: Generate a comprehensive health diagnostic report for the integration.
+  fields:
+    include_history:
+      name: Include History
+      description: Include recent transmission history in the report.
+      required: false
+      default: true
+      selector:
+        boolean: {}
+    include_errors:
+      name: Include Errors
+      description: Include recent error details in the report.
+      required: false
+      default: true
+      selector:
+        boolean: {}
+
+reset_statistics:
+  name: Reset Statistics
+  description: Reset all integration statistics and counters.
+  fields:
+    confirm:
+      name: Confirm Reset
+      description: Confirm that you want to reset all statistics.
+      required: true
+      selector:
+        boolean: {}

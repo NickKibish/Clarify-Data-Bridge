@@ -93,8 +93,8 @@ class ClarifyDataUpdateCoordinator(DataUpdateCoordinator):
             response = await self.client.async_data_frame(
                 filter_query=filter_query,
                 include=["item"],
-                not_before=not_before.isoformat(),
-                before=now.isoformat(),
+                gte=not_before.isoformat(),
+                lt=now.isoformat(),
                 rollup=None,  # No aggregation, get raw data
             )
 

@@ -12,10 +12,12 @@ from pyclarify.views.items import Item
 from pyclarify.views.signals import SignalInfo
 from pyclarify.query import Filter
 
+from .credential_manager import create_secure_logger
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = create_secure_logger(__name__)
 
 
 class ClarifyClientError(Exception):
@@ -77,7 +79,6 @@ class ClarifyClient:
             integration_id,
             api_url,
         )
-        _LOGGER.debug("Client ID: %s...", client_id[:8] if len(client_id) > 8 else "***")
 
     def _create_credentials_file(self) -> str:
         """Create a temporary credentials file for pyclarify.
@@ -280,7 +281,10 @@ class ClarifyClient:
         try:
             _LOGGER.debug("Inserting data to Clarify: %d timestamps, %d series",
                          len(data.get("times", [])), len(data.get("series", {})))
-            response = self._client.insert(data)
+            # Run insert in executor to avoid blocking event loop
+            response = await self.hass.async_add_executor_job(
+                self._client.insert, data
+            )
             _LOGGER.info("Successfully inserted data to Clarify")
             return response
 
@@ -306,7 +310,10 @@ class ClarifyClient:
         try:
             _LOGGER.debug("Inserting DataFrame to Clarify: %d timestamps, %d series",
                          len(dataframe.times), len(dataframe.series))
-            response = self._client.insert(dataframe)
+            # Run insert in executor to avoid blocking event loop
+            response = await self.hass.async_add_executor_job(
+                self._client.insert, dataframe
+            )
             _LOGGER.info("Successfully inserted DataFrame to Clarify")
             return response
 
@@ -347,7 +354,11 @@ class ClarifyClient:
             }
 
             _LOGGER.debug("Saving %d signals to Clarify", len(input_ids))
-            response = self._client.save_signals(params=params)
+            # Run save_signals in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.save_signals, params=params)
+            )
             _LOGGER.info("Successfully saved %d signals to Clarify", len(input_ids))
             return response
 
@@ -422,9 +433,14 @@ class ClarifyClient:
             }
 
             _LOGGER.debug("Publishing %d signals as items", len(signal_ids))
-            response = self._client.publish_signals(
-                items_by_signal=items_by_signal,
-                create_only=create_only,
+            # Run publish_signals in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(
+                    self._client.publish_signals,
+                    items_by_signal=items_by_signal,
+                    create_only=create_only,
+                )
             )
             _LOGGER.info("Successfully published %d signals as items", len(signal_ids))
             return response
@@ -466,7 +482,11 @@ class ClarifyClient:
             if filter_query:
                 params["filter"] = filter_query
 
-            response = self._client.select_signals(**params)
+            # Run select_signals in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.select_signals, **params)
+            )
             _LOGGER.info("Successfully selected signals")
             return response
 
@@ -507,7 +527,11 @@ class ClarifyClient:
             if filter_query:
                 params["filter"] = filter_query
 
-            response = self._client.select_items(**params)
+            # Run select_items in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.select_items, **params)
+            )
             _LOGGER.info("Successfully selected items")
             return response
 
@@ -519,8 +543,8 @@ class ClarifyClient:
         self,
         filter_query: Filter | None = None,
         include: list[str] | None = None,
-        not_before: str | None = None,
-        before: str | None = None,
+        gte: str | None = None,
+        lt: str | None = None,
         rollup: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve time series data from Clarify items.
@@ -528,8 +552,8 @@ class ClarifyClient:
         Args:
             filter_query: Filter to select which items to retrieve data for.
             include: List of relationships to include (e.g., ["item"]).
-            not_before: ISO 8601 timestamp for start of time range.
-            before: ISO 8601 timestamp for end of time range.
+            gte: ISO 8601 timestamp for start of time range (greater than or equal).
+            lt: ISO 8601 timestamp for end of time range (less than).
             rollup: Rollup period (e.g., "PT1H" for 1 hour).
 
         Returns:
@@ -543,9 +567,9 @@ class ClarifyClient:
 
         try:
             _LOGGER.debug(
-                "Retrieving data frame: not_before=%s, before=%s, rollup=%s",
-                not_before,
-                before,
+                "Retrieving data frame: gte=%s, lt=%s, rollup=%s",
+                gte,
+                lt,
                 rollup,
             )
 
@@ -554,14 +578,18 @@ class ClarifyClient:
                 params["filter"] = filter_query
             if include:
                 params["include"] = include
-            if not_before:
-                params["notBefore"] = not_before
-            if before:
-                params["before"] = before
+            if gte:
+                params["gte"] = gte
+            if lt:
+                params["lt"] = lt
             if rollup:
                 params["rollup"] = rollup
 
-            response = self._client.data_frame(**params)
+            # Run data_frame in executor to avoid blocking event loop
+            from functools import partial
+            response = await self.hass.async_add_executor_job(
+                partial(self._client.data_frame, **params)
+            )
             _LOGGER.info("Successfully retrieved data frame")
             return response
 

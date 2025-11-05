@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant, State
 from pyclarify.views.signals import SignalInfo
 
 from .clarify_client import ClarifyClient, ClarifyConnectionError
+from .entity_selector import EntityMetadata, EntitySelector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class ClarifySignalManager:
         hass: HomeAssistant,
         client: ClarifyClient,
         integration_id: str,
+        entity_selector: EntitySelector | None = None,
     ) -> None:
         """Initialize the signal manager.
 
@@ -32,16 +34,21 @@ class ClarifySignalManager:
             hass: Home Assistant instance.
             client: ClarifyClient instance for API communication.
             integration_id: Clarify integration ID for labeling.
+            entity_selector: Optional EntitySelector for enhanced metadata.
         """
         self.hass = hass
         self.client = client
         self.integration_id = integration_id
+        self.entity_selector = entity_selector
 
         # Track created signals: {entity_id: input_id}
         self._entity_to_input_id: dict[str, str] = {}
 
         # Track signal metadata: {input_id: SignalInfo}
         self._signal_metadata: dict[str, SignalInfo] = {}
+
+        # Cache entity metadata: {entity_id: EntityMetadata}
+        self._entity_metadata_cache: dict[str, EntityMetadata] = {}
 
         _LOGGER.debug("Initialized ClarifySignalManager")
 
@@ -105,8 +112,8 @@ class ClarifySignalManager:
             input_id: Clarify input ID.
             state: Current state of the entity.
         """
-        # Build signal metadata from entity
-        signal_info = self._build_signal_info(entity_id, state)
+        # Build signal metadata from entity (with enhanced metadata if available)
+        signal_info = await self._async_build_signal_info(entity_id, state)
 
         try:
             # Save signal to Clarify
@@ -126,12 +133,12 @@ class ClarifySignalManager:
             _LOGGER.error("Failed to create signal for %s: %s", entity_id, err)
             raise
 
-    def _build_signal_info(
+    async def _async_build_signal_info(
         self,
         entity_id: str,
         state: State | None,
     ) -> SignalInfo:
-        """Build SignalInfo from Home Assistant entity.
+        """Build SignalInfo from Home Assistant entity with enhanced metadata.
 
         Args:
             entity_id: Home Assistant entity ID.
@@ -139,6 +146,49 @@ class ClarifySignalManager:
 
         Returns:
             SignalInfo with metadata.
+        """
+        # Try to get enhanced metadata from EntitySelector
+        entity_metadata = None
+        if self.entity_selector:
+            # Check cache first
+            if entity_id in self._entity_metadata_cache:
+                entity_metadata = self._entity_metadata_cache[entity_id]
+            else:
+                # Get fresh metadata
+                entity_metadata = await self.entity_selector.async_get_entity_metadata(entity_id, state)
+                if entity_metadata:
+                    self._entity_metadata_cache[entity_id] = entity_metadata
+
+        # Use enhanced metadata if available
+        if entity_metadata:
+            labels = entity_metadata.to_labels()
+            # Add integration ID to labels
+            labels["integration"] = [self.integration_id]
+
+            signal = SignalInfo(
+                name=entity_metadata.friendly_name,
+                description=entity_metadata.description or f"Home Assistant {entity_metadata.domain} entity",
+                labels=labels,
+            )
+        else:
+            # Fall back to basic metadata extraction
+            signal = self._build_signal_info_basic(entity_id, state)
+
+        return signal
+
+    def _build_signal_info_basic(
+        self,
+        entity_id: str,
+        state: State | None,
+    ) -> SignalInfo:
+        """Build SignalInfo from Home Assistant entity (basic method).
+
+        Args:
+            entity_id: Home Assistant entity ID.
+            state: Current state of the entity.
+
+        Returns:
+            SignalInfo with basic metadata.
         """
         # Extract domain and name
         domain = entity_id.split(".")[0] if "." in entity_id else "unknown"
@@ -210,8 +260,12 @@ class ClarifySignalManager:
             await self.async_ensure_signal(entity_id, state)
             return
 
+        # Invalidate cache for this entity
+        if entity_id in self._entity_metadata_cache:
+            del self._entity_metadata_cache[entity_id]
+
         # Build new metadata
-        new_signal_info = self._build_signal_info(entity_id, state)
+        new_signal_info = await self._async_build_signal_info(entity_id, state)
 
         # Check if metadata changed (compare relevant fields)
         old_signal_info = self._signal_metadata[input_id]
@@ -234,6 +288,17 @@ class ClarifySignalManager:
 
             except ClarifyConnectionError as err:
                 _LOGGER.error("Failed to update signal metadata for %s: %s", entity_id, err)
+
+    def get_entity_metadata(self, entity_id: str) -> EntityMetadata | None:
+        """Get cached entity metadata.
+
+        Args:
+            entity_id: Home Assistant entity ID.
+
+        Returns:
+            EntityMetadata if cached, None otherwise.
+        """
+        return self._entity_metadata_cache.get(entity_id)
 
     def is_signal_created(self, entity_id: str) -> bool:
         """Check if a signal has been created for an entity.
