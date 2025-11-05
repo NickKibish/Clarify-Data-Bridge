@@ -30,6 +30,13 @@ DEFAULT_STALE_THRESHOLD_MINUTES = 5  # Data older than this is considered stale
 DEFAULT_VALIDATE_RANGES = True  # Validate numeric ranges based on device class
 DEFAULT_TRACK_CHANGES_ONLY = False  # Track all data or only changes
 
+# Retry and transmission options
+DEFAULT_MAX_RETRY_ATTEMPTS = 5  # Maximum retry attempts for failed transmissions
+DEFAULT_RETRY_BASE_DELAY = 2.0  # Base delay in seconds for exponential backoff
+DEFAULT_RETRY_MAX_DELAY = 300.0  # Maximum delay between retries (5 minutes)
+DEFAULT_RETRY_QUEUE_SIZE = 1000  # Maximum number of entries in retry queue
+DEFAULT_TRANSMISSION_HISTORY_SIZE = 100  # Number of transmission records to keep
+
 # Configuration options
 CONF_BATCH_INTERVAL = "batch_interval"
 CONF_MAX_BATCH_SIZE = "max_batch_size"
@@ -50,6 +57,13 @@ CONF_PRIORITY_IMMEDIATE = "priority_immediate"
 CONF_STALE_THRESHOLD = "stale_threshold_minutes"
 CONF_VALIDATE_RANGES = "validate_ranges"
 CONF_TRACK_CHANGES_ONLY = "track_changes_only"
+
+# Retry and transmission configuration
+CONF_MAX_RETRY_ATTEMPTS = "max_retry_attempts"
+CONF_RETRY_BASE_DELAY = "retry_base_delay"
+CONF_RETRY_MAX_DELAY = "retry_max_delay"
+CONF_RETRY_QUEUE_SIZE = "retry_queue_size"
+CONF_ENABLE_RETRY = "enable_retry"
 
 # Publishing options
 CONF_PUBLISHING_STRATEGY = "publishing_strategy"
