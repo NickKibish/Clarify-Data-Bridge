@@ -633,25 +633,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # Get entities from selected domains
         entities_by_domain = self._get_entities_by_domain(selected_domains)
 
-        # Create entity options with friendly names, grouped by domain
-        entity_options = {}
-        for domain in sorted(entities_by_domain.keys()):
-            entities = entities_by_domain[domain]
-            for entity_id in sorted(entities):
-                state = self.hass.states.get(entity_id)
-                if state:
-                    friendly_name = state.attributes.get("friendly_name", entity_id)
-                    # Format: "Friendly Name (domain.entity_id)"
-                    entity_options[entity_id] = f"{friendly_name} ({entity_id})"
-
         # Get currently selected entities
         current_selected = self.config_entry.data.get(CONF_SELECTED_ENTITIES, [])
         # Handle legacy case where CONF_SELECTED_ENTITIES might be a string (priority level)
         if isinstance(current_selected, str):
             current_selected = []
 
+        # Use entity selector instead of multi_select for better UX
+        from homeassistant.helpers import selector
+
         schema = vol.Schema({
-            vol.Required("entities", default=current_selected): cv.multi_select(entity_options)
+            vol.Required("entities", default=current_selected): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=selected_domains,
+                    multiple=True,
+                )
+            )
         })
 
         return self.async_show_form(
