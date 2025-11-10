@@ -353,14 +353,14 @@ class CredentialManager:
         # Integration ID validation
         if not integration_id or len(integration_id.strip()) == 0:
             errors.append("Integration ID is required")
-        # Check for valid UUID-like format
+        # Check for valid Clarify integration ID format (alphanumeric, 20-36 chars)
         elif not re.match(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-            integration_id.lower(),
+            r"^[0-9a-zA-Z]{20,36}$",
+            integration_id.strip(),
         ):
             errors.append(
-                "Integration ID must be a valid UUID format "
-                "(e.g., 12345678-1234-1234-1234-123456789abc)"
+                "Integration ID must be a valid Clarify integration ID "
+                "(20-36 alphanumeric characters)"
             )
 
         if errors:

@@ -132,11 +132,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(user_input[CONF_INTEGRATION_ID])
                 self._abort_if_unique_id_configured()
 
-                # Store credentials and move to selection method
-                self._data = user_input
-                self._data["title"] = info["title"]
+                # Create entry immediately with no entities selected
+                # Users can configure entities later via options flow
+                user_input[CONF_SELECTED_ENTITIES] = []
+                user_input[CONF_INCLUDE_DOMAINS] = []
+                user_input[CONF_BATCH_INTERVAL] = DEFAULT_BATCH_INTERVAL
+                user_input[CONF_MAX_BATCH_SIZE] = DEFAULT_MAX_BATCH_SIZE
 
-                return await self.async_step_selection_method()
+                return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
             step_id="user",
