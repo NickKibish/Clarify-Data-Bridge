@@ -1,0 +1,12 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "menu_options": {
+          "batch_settings": "Batch Processing Settings",
+          "entity_filters": "Entity Filtering"
+        }
+      }
+    }
+  }
+}

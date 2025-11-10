@@ -115,12 +115,7 @@
     "step": {
       "init": {
         "title": "Configure Clarify Data Bridge",
-        "description": "Choose what you want to configure",
-        "menu_options": {
-          "batch_settings": "Batch Processing Settings",
-          "entity_filters": "Entity Filtering",
-          "advanced_filters": "Advanced Filters"
-        }
+        "description": "Choose what you want to configure"
       },
       "batch_settings": {
         "title": "Batch Processing Settings",
@@ -146,20 +141,6 @@
           "min_priority": "Only track entities at or above this priority level",
           "include_domains": "Domains to track (sensor, climate, etc.)",
           "include_device_classes": "Specific device classes to track (optional)"
-        }
-      },
-      "advanced_filters": {
-        "title": "Advanced Filtering",
-        "description": "Use patterns and exclusions for precise entity control.\n\n**Include Patterns**: Regex patterns for entities to include (comma-separated)\n**Exclude Patterns**: Regex patterns for entities to exclude (comma-separated)\n**Exclude Entities**: Specific entity IDs to exclude (comma-separated)\n\n**Pattern Examples**:\n• `sensor\\..*_temperature` - All temperature sensors\n• `sensor\\.(kitchen|bedroom)_.*` - Sensors in specific rooms\n• `sensor\\..*_(power|energy)` - All power and energy sensors\n\nChanges take effect after restarting the integration.",
-        "data": {
-          "include_patterns": "Include Patterns (comma-separated)",
-          "exclude_patterns": "Exclude Patterns (comma-separated)",
-          "exclude_entities": "Exclude Entities (comma-separated)"
-        },
-        "data_description": {
-          "include_patterns": "Regular expression patterns to match entity IDs to include",
-          "exclude_patterns": "Regular expression patterns to match entity IDs to exclude",
-          "exclude_entities": "Specific entity IDs to exclude"
         }
       },
       "select_domains": {

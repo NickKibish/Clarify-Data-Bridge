@@ -532,7 +532,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["batch_settings", "entity_filters", "advanced_filters"],
+            menu_options=["batch_settings", "entity_filters"],
         )
 
     async def async_step_batch_settings(
@@ -660,62 +660,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
 
-    async def async_step_advanced_filters(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Configure advanced filtering."""
-        if user_input is not None:
-            new_data = dict(self.config_entry.data)
-
-            if user_input.get("include_patterns"):
-                new_data[CONF_INCLUDE_PATTERNS] = [
-                    p.strip() for p in user_input["include_patterns"].split(",") if p.strip()
-                ]
-            else:
-                new_data.pop(CONF_INCLUDE_PATTERNS, None)
-
-            if user_input.get("exclude_patterns"):
-                new_data[CONF_EXCLUDE_PATTERNS] = [
-                    p.strip() for p in user_input["exclude_patterns"].split(",") if p.strip()
-                ]
-            else:
-                new_data.pop(CONF_EXCLUDE_PATTERNS, None)
-
-            if user_input.get("exclude_entities"):
-                new_data[CONF_EXCLUDE_ENTITIES] = [
-                    e.strip() for e in user_input["exclude_entities"].split(",") if e.strip()
-                ]
-            else:
-                new_data.pop(CONF_EXCLUDE_ENTITIES, None)
-
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, data=new_data
-            )
-            return self.async_create_entry(title="", data={})
-
-        current_include_patterns = self.config_entry.data.get(CONF_INCLUDE_PATTERNS, [])
-        current_exclude_patterns = self.config_entry.data.get(CONF_EXCLUDE_PATTERNS, [])
-        current_exclude_entities = self.config_entry.data.get(CONF_EXCLUDE_ENTITIES, [])
-
-        schema = vol.Schema({
-            vol.Optional(
-                "include_patterns",
-                default=", ".join(current_include_patterns)
-            ): str,
-            vol.Optional(
-                "exclude_patterns",
-                default=", ".join(current_exclude_patterns)
-            ): str,
-            vol.Optional(
-                "exclude_entities",
-                default=", ".join(current_exclude_entities)
-            ): str,
-        })
-
-        return self.async_show_form(
-            step_id="advanced_filters",
-            data_schema=schema,
-        )
 
     def _count_entities_by_domain(self) -> dict[str, int]:
         """Count trackable entities in each supported domain."""
