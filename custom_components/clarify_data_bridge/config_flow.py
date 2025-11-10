@@ -24,6 +24,7 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_INTEGRATION_ID,
+    CONF_DEV_MODE,
     CONF_BATCH_INTERVAL,
     CONF_MAX_BATCH_SIZE,
     CONF_INCLUDE_DOMAINS,
@@ -41,6 +42,8 @@ from .const import (
     ERROR_CANNOT_CONNECT,
     ERROR_INVALID_AUTH,
     ERROR_UNKNOWN,
+    CLARIFY_API_URL_PROD,
+    CLARIFY_API_URL_DEV,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +54,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_CLIENT_ID): str,
         vol.Required(CONF_CLIENT_SECRET): str,
         vol.Required(CONF_INTEGRATION_ID): str,
+        vol.Optional(CONF_DEV_MODE, default=False): bool,
     }
 )
 
@@ -65,11 +69,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     client_id = data[CONF_CLIENT_ID]
     client_secret = data[CONF_CLIENT_SECRET]
     integration_id = data[CONF_INTEGRATION_ID]
+    dev_mode = data.get(CONF_DEV_MODE, False)
+
+    # Select API URL based on dev mode
+    api_url = CLARIFY_API_URL_DEV if dev_mode else CLARIFY_API_URL_PROD
 
     # Validate credentials using Phase 8 validator
     validator = CredentialValidator(hass)
     is_valid, error_message, details = await validator.async_validate_and_test(
-        client_id, client_secret, integration_id
+        client_id, client_secret, integration_id, api_url
     )
 
     if not is_valid:

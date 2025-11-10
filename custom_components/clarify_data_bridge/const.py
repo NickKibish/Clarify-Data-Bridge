@@ -7,6 +7,7 @@ DOMAIN = "clarify_data_bridge"
 CONF_CLIENT_ID = "client_id"
 CONF_CLIENT_SECRET = "client_secret"
 CONF_INTEGRATION_ID = "integration_id"
+CONF_DEV_MODE = "dev_mode"
 CONF_UPDATE_INTERVAL = "update_interval"
 
 # Legacy configuration keys (for migration compatibility)
@@ -134,7 +135,9 @@ ATTR_STRATEGY = "strategy"
 ATTR_FORCE = "force"
 
 # Clarify API constants
-CLARIFY_API_URL = "https://api.clarify.cloud/v1"
+CLARIFY_API_URL_PROD = "https://api.clarify.io/v1/"
+CLARIFY_API_URL_DEV = "https://api.clarify.cloud/v1/"
+CLARIFY_API_URL = CLARIFY_API_URL_DEV  # Default for backward compatibility
 
 # Supported Home Assistant domains for data collection
 SUPPORTED_DOMAINS = [

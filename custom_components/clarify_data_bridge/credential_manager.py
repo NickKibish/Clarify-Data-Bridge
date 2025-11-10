@@ -242,12 +242,14 @@ class CredentialManager:
     async def async_validate_credentials(
         self,
         credentials: OAuth2Credentials,
+        api_url: str | None = None,
         force_refresh: bool = False,
     ) -> CredentialValidationResult:
         """Validate credentials by testing API connection.
 
         Args:
             credentials: Credentials to validate
+            api_url: Optional API URL to use for validation
             force_refresh: Force validation even if cached result exists
 
         Returns:
@@ -276,6 +278,7 @@ class CredentialManager:
                 client_id=credentials.client_id,
                 client_secret=credentials.client_secret,
                 integration_id=credentials.integration_id,
+                api_url=api_url or "https://api.clarify.cloud/v1/",
             )
 
             # Attempt connection

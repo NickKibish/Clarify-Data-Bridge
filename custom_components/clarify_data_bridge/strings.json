@@ -7,12 +7,14 @@
         "data": {
           "client_id": "Client ID",
           "client_secret": "Client Secret",
-          "integration_id": "Integration ID"
+          "integration_id": "Integration ID",
+          "dev_mode": "Development Mode"
         },
         "data_description": {
           "client_id": "OAuth 2.0 Client ID from your Clarify credentials file",
           "client_secret": "OAuth 2.0 Client Secret from your Clarify credentials file",
-          "integration_id": "Your Clarify integration identifier"
+          "integration_id": "Your Clarify integration identifier",
+          "dev_mode": "Use development server (api.clarify.cloud) instead of production (api.clarify.io)"
         }
       },
       "selection_method": {

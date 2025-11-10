@@ -32,6 +32,7 @@ from .const import (
     CONF_CLIENT_ID,
     CONF_CLIENT_SECRET,
     CONF_INTEGRATION_ID,
+    CONF_DEV_MODE,
     CONF_BATCH_INTERVAL,
     CONF_MAX_BATCH_SIZE,
     CONF_INCLUDE_DOMAINS,
@@ -46,6 +47,8 @@ from .const import (
     DEFAULT_DATA_UPDATE_INTERVAL,
     DEFAULT_LOOKBACK_HOURS,
     SUPPORTED_DOMAINS,
+    CLARIFY_API_URL_PROD,
+    CLARIFY_API_URL_DEV,
     ENTRY_DATA_CLIENT,
     ENTRY_DATA_COORDINATOR,
     ENTRY_DATA_LISTENER,
@@ -122,6 +125,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     client_id = entry.data[CONF_CLIENT_ID]
     client_secret = entry.data[CONF_CLIENT_SECRET]
     integration_id = entry.data[CONF_INTEGRATION_ID]
+    dev_mode = entry.data.get(CONF_DEV_MODE, False)
+
+    # Select API URL based on dev mode
+    api_url = CLARIFY_API_URL_DEV if dev_mode else CLARIFY_API_URL_PROD
 
     # Get optional configuration
     batch_interval = entry.data.get(CONF_BATCH_INTERVAL, DEFAULT_BATCH_INTERVAL)
@@ -152,6 +159,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         client_id=client_id,
         client_secret=client_secret,
         integration_id=integration_id,
+        api_url=api_url,
     )
 
     try:

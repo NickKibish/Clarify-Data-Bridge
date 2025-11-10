@@ -380,6 +380,7 @@ class CredentialValidator:
         client_id: str,
         client_secret: str,
         integration_id: str,
+        api_url: str | None = None,
     ) -> tuple[bool, str, dict[str, any]]:
         """Validate credentials format and test connection.
 
@@ -387,6 +388,7 @@ class CredentialValidator:
             client_id: Client ID
             client_secret: Client secret
             integration_id: Integration ID
+            api_url: Optional API URL (defaults to dev server if not provided)
 
         Returns:
             Tuple of (is_valid, error_message, details)
@@ -415,7 +417,7 @@ class CredentialValidator:
 
         # Step 3: Test connection
         try:
-            result = await manager.async_validate_credentials(credentials)
+            result = await manager.async_validate_credentials(credentials, api_url)
 
             if result.is_valid:
                 details["connection_test"] = "passed"
