@@ -630,7 +630,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # Update config entry
             new_data = dict(self.config_entry.data)
             new_data[CONF_SELECTED_ENTITIES] = selected
-            new_data[CONF_INCLUDE_DOMAINS] = self._selected_domains
+            # Clear domain-based filtering when using specific entity selection
+            new_data[CONF_INCLUDE_DOMAINS] = []
 
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data

@@ -56,6 +56,7 @@ class OAuth2TokenManager:
         self._refresh_tasks: dict[str, asyncio.Task] = {}
         self._refresh_callbacks: dict[str, list[Callable]] = {}
         self._is_running = False
+        self._monitor_task: asyncio.Task | None = None
 
         _LOGGER.info("OAuth 2.0 token manager initialized")
 
@@ -68,13 +69,24 @@ class OAuth2TokenManager:
         self._is_running = True
         _LOGGER.info("Starting token refresh monitoring")
 
-        # Start monitoring task
-        self.hass.async_create_task(self._async_monitor_tokens())
+        # Start monitoring task as a background task to avoid blocking HA startup
+        self._monitor_task = self.hass.async_create_background_task(
+            self._async_monitor_tokens(),
+            "clarify_data_bridge_token_monitor"
+        )
 
     async def async_stop(self) -> None:
         """Stop token refresh monitoring."""
         self._is_running = False
         _LOGGER.info("Stopping token refresh monitoring")
+
+        # Cancel monitor task immediately
+        if self._monitor_task and not self._monitor_task.done():
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
 
         # Cancel all refresh tasks
         for task in self._refresh_tasks.values():
